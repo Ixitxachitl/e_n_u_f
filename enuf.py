@@ -107,11 +107,10 @@ class ChatBotHandler:
         if msg.room.name not in self.target_counter:
             self.target_counter[msg.room.name] = random.randint(15, 25)
 
-        response = self.chatbot.generate(msg.text)
-        print(response)
-
         # If the message counter reaches the randomly set target for specific room, generate a response
         if self.message_counter[msg.room.name] == self.target_counter[msg.room.name]:
+            response = self.chatbot.generate(msg.text)
+            print(response)
             if random.random() <= .05:
                 await msg.reply(response)
             else:
