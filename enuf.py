@@ -20,7 +20,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['katmakes']
+TARGET_CHANNEL = ['channel']
 
 
 class MarkovChatbot:
