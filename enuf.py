@@ -20,7 +20,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['katmakes']
+TARGET_CHANNEL = ['brakkie']
 
 
 class MarkovChatbot:
@@ -112,11 +112,12 @@ class ChatBotHandler:
 
         # If the message counter reaches the randomly set target for specific room, generate a response
         if self.message_counter[msg.room.name] == self.target_counter[msg.room.name]:
+            '''
             if random.random() <= .05:
                 await msg.reply(response)
             else:
                 await msg.chat.send_message(msg.room.name, response)
-
+            '''
             # Reset the message counter for the specific room
             self.message_counter[msg.room.name] = 0
             # Generate a new random target between 10 and 20 for the next response in this room
