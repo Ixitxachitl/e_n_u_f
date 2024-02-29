@@ -1,25 +1,47 @@
-Twitch Chatbot with Markov Chain Model
-This chatbot is designed for Twitch's chat platform and uses the Markov Chain model to generate text.
-Prerequisites
-Before you begin, ensure you have met the following requirements:
-You have a Twitch account.
-You have a Twitch developer application with a Client ID and Client Secret.
-Running Twitch Chatbot with Markov Chain Model
-To run this project, you need to follow the steps below:
-Clone this repository: Clone this repo to your local machine.
-Set up your Twitch developer application credentials
-Go to your Twitch developer dashboard and click on your application. Copy the Client ID and Client Secret.
-Open config.ini, replace APP_ID, and APP_SECRET with your Twitch application Client ID and Client Secret, respectively.
-Your config.ini should look like this:
+# Twitch Chatbot using Markov Chain Model
+
+This README provides information on how to set up and operate the Twitch chatbot which generates text using the Markov Chain model.
+
+## Prerequisites
+
+In order to successfully run the chatbot, the following prerequisites must be met:
+
+* You require a Twitch account.
+* You require a Twitch developer application with a Client ID and Client Secret.
+
+## How to run the Twitch Chatbot
+
+To operate this project, follow these steps:
+
+### 1. Clone the repository:
+
+Clone this repository into your local machine.
+
+### 2. Setting up your Twitch developer application credentials:
+
+* Navigate to your Twitch developer dashboard and select your application. Copy the Client ID and Client Secret.
+
+* The next step is to open the `config.ini` file and replace the `APP_ID` and `APP_SECRET` with your Client ID and Client Secret that were just copied.
+
+The `config.ini` file should look as follows:
 [TWITCH_CREDENTIALS] APP_ID = your_twitch_client_id APP_SECRET = your_twitch_client_secret OAUTH_TOKEN = REFRESH_TOKEN =
-Run enuf.py
-You can then run the enuf.py also provided in this repo which uses the config file to authenticate with Twitch's servers.
-The app triggers the Twitch OAuth2 authentication process if it does not find the OAuth token and refresh token in the config file. It prompts you to login on your default web browser and after successful login, it stores the OAuth token and refresh token in the config file.
-Chat in the Target Channels
-The app connects to the Twitch IRC server and joins the target chat rooms defined in the TARGET_CHANNEL list.
-Use the Bot
-Every time a message is sent in a chat room, an instance of a Markov Chatbot for the chat room is created, and the text of the sent message is appended as new training data for the chatbot.
-Deciding When the Bot Talks
-The bot by default generates a chat message after every 15 to 25 user messages in a chat room. After sending a message, this target is reset with another random number between 15 and 25.
-You can stop the bot at any point by pressing ENTER.
-Enjoy using the Twitch Chatbot with Markov Chain Model!
+
+### 3. Run the `enuf.py`:
+
+Having set your Twitch developer application credentials, the final step is to run the `enuf.py` program which relies on the `config.ini` file for authentication with the Twitch servers. You can run the following in your Python environment:
+python python enuf.py
+
+If no OAuth token and refresh token are found within the config file, the program will initiate the Twitch OAuth 2.0 authentication process which prompts you to log in through your default web browser. Once logged in correctly, the OAuth token and refresh token are stored within the config file.
+
+### 4. Using the chatbot:
+
+By running the file, the program will first connect to the Twitch IRC server before joining the chat rooms which are specified in the `TARGET_CHANNEL` array.
+
+Once a message is sent within a chat room, an instance of the Markov Chatbot class is created for each room in the array. The message text content is then added to the end of the training data which is handled by the bot.
+
+The bot will generate a chat message once a quota of 15 to 25 user messages (random value) have been sent in the chat room. Following this event, this value will reset to another random number between 15 to 25.
+
+To stop the bot from sending messages, simply press ENTER.
+
+Enjoy your newly created Twitch chatbot!
+
