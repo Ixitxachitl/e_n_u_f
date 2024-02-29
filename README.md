@@ -29,7 +29,8 @@ The `config.ini` file should look as follows:
 [TWITCH_CREDENTIALS]
 APP_ID = your_twitch_client_id
 APP_SECRET = your_twitch_client_secret
-OAUTH_TOKEN = REFRESH_TOKEN =
+OAUTH_TOKEN = 
+REFRESH_TOKEN =
 ```
 
 ### 3. Run the `enuf.py`:
