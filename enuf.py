@@ -115,7 +115,7 @@ class ChatBotHandler:
         # If the message counter reaches the randomly set target for specific room, generate a response
         if self.message_counter[msg.room.name] == self.target_counter[msg.room.name]:
             response = self.chatbots[msg.room.name].generate(msg.text)
-            print(response)
+            print(f'Generated in {msg.user.name}: {response}')
 
             if random.random() <= .05:
                 await msg.reply(response)
