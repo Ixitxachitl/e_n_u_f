@@ -8,6 +8,7 @@ import collections
 import configparser
 from typing import Dict
 import re
+from twitchAPI.oauth import UserAuthenticator
 
 # read config.ini file
 config_object = configparser.ConfigParser()
@@ -20,16 +21,15 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['brakkie']
+TARGET_CHANNEL = ['thejameskz','talesanura']
 
 
 class MarkovChatbot:
 
-    def __init__(self, order=2, data_file="data.txt"):
-        # Initialize the chatbot with specified order and data file
+    def __init__(self, room_name, order=2):
         self.order = order
         self.transitions = collections.defaultdict(list)
-        self.data_file = data_file
+        self.data_file = f"{room_name}.txt"
         self.load_and_train()
 
     def load_and_train(self):
@@ -67,7 +67,7 @@ class MarkovChatbot:
         while not generated_words:
             new_words = []
             next_word = ""
-            max_length = random.randint(8, 20)  # This will generate a random number between 1 and 20
+            max_length = random.randint(8, 20)  # This will generate a random number between 8 and 20
             while next_word not in eos_tokens and len(new_words) < max_length:
                 if current_state not in self.transitions:
                     current_state = random.choice(list(self.transitions.keys()))
@@ -85,7 +85,7 @@ class MarkovChatbot:
 
 class ChatBotHandler:
     def __init__(self):
-        self.chatbot = MarkovChatbot()
+        self.chatbots = {}
         # Initialize the message counter as empty dictionary
         self.message_counter: Dict[str, int] = {}
         # Initialize target counter as empty dictionary
@@ -98,8 +98,13 @@ class ChatBotHandler:
 
     async def handle_incoming_message(self, msg: ChatMessage):
         print(f'in {msg.room.name}, {msg.user.name} said: {msg.text}')
-        self.chatbot.append_data(msg.text)
-        self.chatbot.train(msg.text)
+
+        # create a new instance of MarkovChatbot for this room if it doesn't already exist
+        if msg.room.name not in self.chatbots:
+            self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
+
+        self.chatbots[msg.room.name].append_data(msg.text)
+        self.chatbots[msg.room.name].train(msg.text)
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
 
@@ -107,28 +112,39 @@ class ChatBotHandler:
         if msg.room.name not in self.target_counter:
             self.target_counter[msg.room.name] = random.randint(15, 25)
 
-        response = self.chatbot.generate(msg.text)
-        print(response)
-
         # If the message counter reaches the randomly set target for specific room, generate a response
         if self.message_counter[msg.room.name] == self.target_counter[msg.room.name]:
-            '''
+            response = self.chatbots[msg.room.name].generate(msg.text)
+            print(response)
+
             if random.random() <= .05:
                 await msg.reply(response)
             else:
                 await msg.chat.send_message(msg.room.name, response)
-            '''
+
             # Reset the message counter for the specific room
             self.message_counter[msg.room.name] = 0
             # Generate a new random target between 10 and 20 for the next response in this room
             self.target_counter[msg.room.name] = random.randint(15, 25)
 
 
-async def run():
+async def run(oauth_token='', refresh_token=''):
     handler = ChatBotHandler()
 
     twitch = await Twitch(APP_ID, APP_SECRET)
-    await twitch.set_user_authentication(OAUTH_TOKEN, USER_SCOPE, REFRESH_TOKEN)
+
+    if oauth_token == '' or refresh_token == '':
+        auth = UserAuthenticator(twitch, USER_SCOPE, force_verify=True)
+        # this will open your default browser and prompt you with the twitch verification website
+        oauth_token, refresh_token = await auth.authenticate()
+        # add User authentication
+        # Update the OAUTH_TOKEN and REFRESH_TOKEN in the config file
+        config_object["TWITCH_CREDENTIALS"]["OAUTH_TOKEN"] = oauth_token
+        config_object["TWITCH_CREDENTIALS"]["REFRESH_TOKEN"] = refresh_token
+        # Write changes back to file
+        with open('config.ini', 'w') as conf:
+            config_object.write(conf)
+    await twitch.set_user_authentication(oauth_token, USER_SCOPE, refresh_token)
 
     chat = await Chat(twitch)
     chat.register_event(ChatEvent.READY, handler.handle_bot_startup)
@@ -143,4 +159,4 @@ async def run():
         await twitch.close()
 
 
-asyncio.run(run())
+asyncio.run(run(OAUTH_TOKEN, REFRESH_TOKEN))
