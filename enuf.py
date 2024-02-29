@@ -111,7 +111,7 @@ class MarkovChatbot:
         - The generated response may contain spaces at the beginning due to the Markov chain model.
         - The order of the Markov chain model should be chosen based on the expected length of the input text and the complexity of the language used in the training data.
     """
-    def __init__(self, room_name, order=2):
+    def __init__(self, room_name, order=5):
         self.order = order
         self.transitions = collections.defaultdict(list)
         self.data_file = f"{room_name}.txt"
