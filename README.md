@@ -20,6 +20,8 @@ Clone this repository into your local machine.
 ### 2. Setting up your Twitch developer application credentials:
 
 - Navigate to your Twitch developer dashboard and select your application. Copy the Client ID and Client Secret.
+  
+- Add `http://localhost:17563` to your Redirect URI list.
 
 - The next step is to open the `config.ini` file and replace the `APP_ID` and `APP_SECRET` with your Client ID and Client Secret that were just copied.
 
