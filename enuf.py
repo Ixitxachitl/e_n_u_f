@@ -145,7 +145,7 @@ class MarkovChatbot:
 
     def generate(self, input_text):
         split_input_text = input_text.split()
-        current_order = min(self.order, len(split_input_text))
+        current_order = max(self.order, len(split_input_text))
         current_state = tuple(split_input_text[-current_order:])
         generated_words = []
         eos_tokens = {'.', '!', '?'}
