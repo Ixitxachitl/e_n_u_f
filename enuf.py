@@ -21,7 +21,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['','']
+TARGET_CHANNEL = ['thejameskz']
 
 
 class MarkovChatbot:
@@ -35,7 +35,7 @@ class MarkovChatbot:
         # Load existing training data from the data file if it exists and train chatbot
         try:
             if os.path.exists(self.data_file):
-                with open(self.data_file, "r", encoding="utf-8") as file:
+                with open(self.data_file, "r", encoding="utf-8", newline='\r\n') as file:
                     data = file.read()
                 self.train(data)
         except Exception as e:
@@ -43,19 +43,24 @@ class MarkovChatbot:
 
     def train(self, text):
         # Train the chatbot with the provided text
-        # Use regex to split inputs on whitespaces and punctuation.
-        # This treats punctuation as separate words
-        words = re.findall(r"[\w']+|[.!?]", text)
-        for i in range(len(words) - self.order):
+        # Use regex to split inputs on whitespaces, punctuation, and Windows newlines
+        words = re.findall(r"[\w']+|[.!?]|[\r\n]+", text)
+
+        i = 0
+        while i < len(words) - self.order:
+            if '\r\n' in words[i:i + self.order + 1]:  # Check for newline in the sequence and the next word
+                i += 1  # If found, skip the current index
+                continue
             # Split the text into sequences of words, learning what word tends to follow a given sequence
             current_state = tuple(words[i: i + self.order])
             next_word = words[i + self.order]
             self.transitions[current_state].append(next_word)
+            i += 1
 
     def append_data(self, text):
         # Append new training data to the data file
         with open(self.data_file, "a", encoding="utf-8") as append_file:
-            append_file.write(text + '\n')
+            append_file.write(text + '\r\n')
 
     def generate(self, input_text):
         split_input_text = input_text.split()
@@ -107,7 +112,7 @@ class ChatBotHandler:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
 
         self.chatbots[msg.room.name].append_data(msg.text)
-        self.chatbots[msg.room.name].train(msg.text)
+        self.chatbots[msg.room.name].train(msg.text + '\r\n')
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
 
