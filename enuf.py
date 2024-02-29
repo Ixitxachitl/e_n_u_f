@@ -225,7 +225,7 @@ class ChatBotHandler:
             message = ChatMessage(room=chat_room, user=user, text="Hello")
             await handle_incoming_message(self, message)
         """
-        print(f'in {msg.room.name}, {msg.user.name} said: {msg.text}')
+        print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
 
         # create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
