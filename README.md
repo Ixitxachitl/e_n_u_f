@@ -37,7 +37,7 @@ REFRESH_TOKEN =
 
 Having set your Twitch developer application credentials, the final step is to run the `enuf.py` program which relies on the `config.ini` file for authentication with the Twitch servers. You can run the following in your Python environment:
 ```
-python python enuf.py
+python enuf.py
 ```
 
 If no OAuth token and refresh token are found within the config file, the program will initiate the Twitch OAuth 2.0 authentication process which prompts you to log in through your default web browser. Once logged in correctly, the OAuth token and refresh token are stored within the config file.
