@@ -58,7 +58,7 @@ class MarkovChatbot:
             if '\n' in words_bigrams[i][0] or '\n' in words_bigrams[i][1]:
                 continue
             current_state = tuple(words_bigrams[i])
-            next_word = words[i + 2] if i + 2 < len(words) else '.'
+            next_word = words[i + 2] if i + 2 < len(words) else ''
             self.transitions[current_state].append(next_word)
 
     def append_data(self, text):
