@@ -50,7 +50,7 @@ By running the file, the program will first connect to the Twitch IRC server bef
 
 Once a message is sent within a chat room, an instance of the Markov Chatbot class is created for each room in the array. The message text content is then added to the end of the training data which is handled by the bot.
 
-The bot will generate a chat message once a quota of 15 to 25 user messages (random value) have been sent in the chat room. Following this event, this value will reset to another random number between 15 to 25.
+The bot will generate chat messages at random.
 
 To stop the bot from sending messages, simply press ENTER.
 
