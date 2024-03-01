@@ -78,33 +78,41 @@ class MarkovChatbot:
         eos_tokens = {'.', '?'}
         while not generated_words:
             new_words = []
-            while True:  # keep looping until we hit an end-of-sentence token or exceed our maximum length
+            while True:
                 if current_state not in self.transitions:
                     print(f"Current state '{current_state}' not in transitions. Selecting a random state.")
                     current_state = random.choice(list(self.transitions.keys()))
-
                 # Get transitions for the current state
                 possible_transitions = self.transitions[current_state]
 
-                # Apply exponential decay to the probabilities
-                probabilities = [math.exp(-0.5 * i) for i in range(len(possible_transitions))]
-                p_sum = sum(probabilities)
-                probabilities = [p / p_sum for p in probabilities]  # normalize probabilities
+                # Define the decay scale factor relative to max_length
+                scale_factor = len(new_words) / max_length
+                # Calculate exponential decay for whether any next word is chosen at all, scaled to max_length
+                if len(new_words) > 0:  # apply decay only after the first word
+                    continuation_probability = math.exp(-0.5 * scale_factor)
+                else:
+                    continuation_probability = 1.0  # don't apply decay for the first word
+                print(f"Continuation probability: {continuation_probability}")
 
-                # Select next word with adjusted probabilities
-                next_word = random.choices(possible_transitions, probabilities)[0]
-
+                # Make the decision whether to continue generating words or not
+                continue_generation = \
+                    random.choices([True, False], weights=[continuation_probability, 1 - continuation_probability])[0]
+                if not continue_generation:
+                    break  # stop generating words
+                # The probability of picking any individual word is proportional to its frequency (i.e., the standard behavior of random.choices when the 'weights' parameter is not specified)
+                next_word = random.choice(possible_transitions)
                 print(f"Adding next word '{next_word}' to the new words.")
+
                 if not new_words and next_word in eos_tokens:
                     continue
                 space = "" if next_word in eos_tokens else " "
                 next_word = re.sub(' +', ' ', next_word)
                 new_words.append(space + next_word.strip())
                 current_state = tuple((*current_state[1:], next_word))
-
-                # Break the loop if we hit an end-of-sentence token or our length is sufficient
-                if next_word in eos_tokens or len(new_words) >= max_length:
+                # Break the loop if we hit an end-of-sentence token
+                if next_word in eos_tokens:
                     break
+
             generated_words = new_words
             print(f"Generated words '{generated_words}'.")
         generated_message = ''.join(generated_words).lstrip()
@@ -125,29 +133,27 @@ class ChatBotHandler:
 
     async def handle_incoming_message(self, msg: ChatMessage, max_messages=25):
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
-
         # create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
-        self.chatbots[msg.room.name].append_data(msg.text)
+        self.chatbots[msg.room.name].append_text(msg.text)
         self.chatbots[msg.room.name].train(msg.text)
-
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
-
         # Calculate respond probability
-        respond_probability = min(self.message_counter[msg.room.name] / max_messages, 1)
-
+        exponent = -self.message_counter[msg.room.name] / max_messages
+        respond_probability = 1 - (1 - 1 / math.e) ** exponent  # added exponential growth
+        print(f'Respond probability in {msg.room.name}: {respond_probability}')  # added print statement
         # Generate a response if random value is less than respond probability
-        if random.random() < respond_probability:
+        random_val = random.random()
+        print(f'Random value: {random_val}')  # added print statement
+        if random_val < respond_probability:
             response = self.chatbots[msg.room.name].generate(msg.text)
             print(f'Generated in {msg.room.name}: {response}')
-
             if random.random() < 0.05:
                 await msg.reply(response)
             else:
                 await msg.chat.send_message(msg.room.name, response)
-
             # Reset the message counter for the specific room
             self.message_counter[msg.room.name] = 0
 
