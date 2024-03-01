@@ -1,6 +1,7 @@
 import asyncio
 import collections
 import configparser
+import math
 import os
 import random
 import re
@@ -66,34 +67,45 @@ class MarkovChatbot:
         with open(self.data_file, "a", encoding="utf-8") as append_file:
             append_file.write(text + '\n')
 
-    def generate(self, input_text):
+    def generate(self, input_text, max_length=20):
         lemmatizer = WordNetLemmatizer()
         print("Generating response...")
         split_input_text = [lemmatizer.lemmatize(word.lower()) for word in input_text.split()]
         current_order = min(self.order, len(split_input_text))
         current_state = tuple(split_input_text[-current_order:])
         generated_words = []
-        eos_tokens = {'.', '!', '?'}
-
+        eos_tokens = {'.', '?'}
         while not generated_words:
             new_words = []
-            next_word = ""
-            max_length = random.randint(8, 20)
-            while next_word not in eos_tokens and len(new_words) < max_length:
+            while True:  # keep looping until we hit an end-of-sentence token or exceed our maximum length
                 if current_state not in self.transitions:
                     print(f"Current state '{current_state}' not in transitions. Selecting a random state.")
                     current_state = random.choice(list(self.transitions.keys()))
-                next_word = random.choice(self.transitions[current_state])
+
+                # Get transitions for the current state
+                possible_transitions = self.transitions[current_state]
+
+                # Apply exponential decay to the probabilities
+                probabilities = [math.exp(-0.5 * i) for i in range(len(possible_transitions))]
+                p_sum = sum(probabilities)
+                probabilities = [p / p_sum for p in probabilities]  # normalize probabilities
+
+                # Select next word with adjusted probabilities
+                next_word = random.choices(possible_transitions, probabilities)[0]
+
                 print(f"Adding next word '{next_word}' to the new words.")
-                if not new_words and next_word in {'.', '?'}:
+                if not new_words and next_word in eos_tokens:
                     continue
                 space = "" if next_word in eos_tokens else " "
                 next_word = re.sub(' +', ' ', next_word)
                 new_words.append(space + next_word.strip())
                 current_state = tuple((*current_state[1:], next_word))
+
+                # Break the loop if we hit an end-of-sentence token or our length is sufficient
+                if next_word in eos_tokens or len(new_words) >= max_length:
+                    break
             generated_words = new_words
             print(f"Generated words '{generated_words}'.")
-
         generated_message = ''.join(generated_words).lstrip()
         print(f"Final message: '{generated_message}'")
         if generated_message.endswith('.'):
@@ -106,44 +118,35 @@ class ChatBotHandler:
         self.chatbots = {}
         # Initialize the message counter as empty dictionary
         self.message_counter: Dict[str, int] = {}
-        # Initialize target counter as empty dictionary
-        self.target_counter: Dict[str, int] = {}
 
     @staticmethod
     async def handle_bot_startup(ready_event: EventData):
         print('Bot is ready for work, joining channels')
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=25):
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
 
         # create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
-
         self.chatbots[msg.room.name].append_data(msg.text)
         self.chatbots[msg.room.name].train(msg.text)
+
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
 
-        # If this is the first message in the room initialize the target counter
-        if msg.room.name not in self.target_counter:
-            self.target_counter[msg.room.name] = random.randint(15, 25)
+        # Calculate respond probability
+        respond_probability = min(self.message_counter[msg.room.name] / max_messages, 1)
 
-        # If the message counter reaches the randomly set target for specific room, generate a response
-        if self.message_counter[msg.room.name] == self.target_counter[msg.room.name]:
+        # Generate a response if random value is less than respond probability
+        if random.random() < respond_probability:
             response = self.chatbots[msg.room.name].generate(msg.text)
             print(f'Generated in {msg.room.name}: {response}')
-
-            if random.random() <= .05:
-                await msg.reply(response)
-            else:
-                await msg.chat.send_message(msg.room.name, response)
+            await msg.reply(response)
 
             # Reset the message counter for the specific room
             self.message_counter[msg.room.name] = 0
-            # Generate a new random target between 10 and 20 for the next response in this room
-            self.target_counter[msg.room.name] = random.randint(15, 25)
 
 
 async def run(oauth_token='', refresh_token=''):
