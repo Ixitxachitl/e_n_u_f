@@ -30,7 +30,7 @@ TARGET_CHANNEL = ['']
 
 
 class MarkovChatbot:
-    def __init__(self, room_name, order=3):
+    def __init__(self, room_name, order=2):
         self.order = order
         self.transitions = collections.defaultdict(list)
         self.data_file = f"{room_name}.txt"
