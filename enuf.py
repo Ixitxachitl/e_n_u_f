@@ -1,14 +1,18 @@
-from twitchAPI.twitch import Twitch
-from twitchAPI.type import AuthScope, ChatEvent
-from twitchAPI.chat import Chat, EventData, ChatMessage
 import asyncio
-import random
-import os
 import collections
 import configparser
-from typing import Dict
+import os
+import random
 import re
+from typing import Dict
+
+from nltk import bigrams
+from nltk.stem import WordNetLemmatizer
+from twitchAPI.chat import Chat, EventData, ChatMessage
 from twitchAPI.oauth import UserAuthenticator
+from twitchAPI.twitch import Twitch
+from twitchAPI.type import AuthScope, ChatEvent
+
 
 # read config.ini file
 config_object = configparser.ConfigParser()
@@ -21,7 +25,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['katmakes']
+TARGET_CHANNEL = ['']
 
 
 class MarkovChatbot:
@@ -42,20 +46,26 @@ class MarkovChatbot:
             print(f"Error loading and training data: {str(e)}")
 
     def train(self, text):
+        lemmatizer = WordNetLemmatizer()
+
         # Train the chatbot with the provided text
         # Use regex to split inputs on whitespaces and punctuation.
         # This treats punctuation as separate words
-        words = re.findall(r"[\w']+|[.!?]", text)
-        i = 0
-        while i < len(words) - self.order:
-            if '\n' in words[i:i + self.order + 1]:  # Check for newline in the sequence and the next word
-                i += 1  # If found, skip the current index
-                continue
+        words = re.findall(r"[\w']+|[.!?]", text.lower())
+
+        # Lemmatize words
+        words = [lemmatizer.lemmatize(word) for word in words]
+
+        words_bigrams = list(bigrams(words))
+
+        for i in range(len(words_bigrams)):
+            # Check for newline in the sequence and the next word
+            if '\n' in words_bigrams[i][0] or '\n' in words_bigrams[i][1]:
+                continue  # If found, skip the current index
             # Split the text into sequences of words, learning what word tends to follow a given sequence
-            current_state = tuple(words[i: i + self.order])
-            next_word = words[i + self.order]
+            current_state = tuple(words_bigrams[i])
+            next_word = words[i + 2] if i + 2 < len(words) else ''
             self.transitions[current_state].append(next_word)
-            i += 1
 
     def append_data(self, text):
         # Append new training data to the data file
@@ -63,19 +73,27 @@ class MarkovChatbot:
             append_file.write(text + '\n')
 
     def generate(self, input_text):
-        split_input_text = input_text.split()
+        lemmatizer = WordNetLemmatizer()
+
+        # Preprocess input text
+        split_input_text = [lemmatizer.lemmatize(word.lower()) for word in input_text.split()]
+
         current_order = min(self.order, len(split_input_text))
         current_state = tuple(split_input_text[-current_order:])
         generated_words = []
         eos_tokens = {'.', '!', '?'}
+
         while not generated_words:
             new_words = []
             next_word = ""
+
             max_length = random.randint(8, 20)  # This will generate a random number between 8 and 20
             while next_word not in eos_tokens and len(new_words) < max_length:
                 if current_state not in self.transitions:
                     current_state = random.choice(list(self.transitions.keys()))
+
                 next_word = random.choice(self.transitions[current_state])
+
                 # If it's the first word and is an eos token, then continue to the next iteration
                 if not new_words and next_word in {'.', '?'}:
                     continue
@@ -83,11 +101,15 @@ class MarkovChatbot:
                 space = "" if next_word in eos_tokens else " "
                 new_words.append(space + next_word)
                 current_state = tuple((*current_state[1:], next_word))
+
             generated_words = new_words
+
         generated_message = ''.join(generated_words).lstrip()  # remove potential initial space
+
         # remove the '.' token from the end of the generated message if it's there
         if generated_message.endswith('.'):
             generated_message = generated_message[:-1]
+
         return generated_message
 
 
