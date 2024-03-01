@@ -26,11 +26,11 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['']
+TARGET_CHANNEL = ['firstnamebutt']
 
 
 class MarkovChatbot:
-    def __init__(self, room_name, order=3):
+    def __init__(self, room_name, order=2):
         self.order = order
         self.transitions = collections.defaultdict(list)
         self.data_file = f"{room_name}.txt"
@@ -51,15 +51,16 @@ class MarkovChatbot:
         lemmatizer = WordNetLemmatizer()
         # Train the chatbot with the provided text
         print("Training...")
-        words = re.findall(r"[\w']+|[.!?]", text.lower())
+        words = re.findall(r"[\w']+|[.!?]", text)
         words = [lemmatizer.lemmatize(word) for word in words]
         words_bigrams = list(bigrams(words))
         for i in range(len(words_bigrams)):
             if '\n' in words_bigrams[i][0] or '\n' in words_bigrams[i][1]:
                 continue
             current_state = tuple(words_bigrams[i])
-            next_word = words[i + 2] if i + 2 < len(words) else ''
-            self.transitions[current_state].append(next_word)
+            if i + 2 < len(words):
+                next_word = words[i + 2]
+                self.transitions[current_state].append(next_word)
 
     def append_data(self, text):
         # Append new training data to the data file
@@ -108,8 +109,6 @@ class MarkovChatbot:
             print(f"Generated words '{generated_words}'.")
         generated_message = ''.join(generated_words).lstrip()
         print(f"Final message: '{generated_message}'")
-        if generated_message.endswith('.'):
-            generated_message = generated_message[:-1]
         return generated_message
 
 
@@ -143,7 +142,11 @@ class ChatBotHandler:
         if random.random() < respond_probability:
             response = self.chatbots[msg.room.name].generate(msg.text)
             print(f'Generated in {msg.room.name}: {response}')
-            await msg.reply(response)
+
+            if random.random() < 0.05:
+                await msg.reply(response)
+            else:
+                await msg.chat.send_message(msg.room.name, response)
 
             # Reset the message counter for the specific room
             self.message_counter[msg.room.name] = 0
