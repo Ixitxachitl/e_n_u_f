@@ -51,7 +51,7 @@ class MarkovChatbot:
         lemmatizer = WordNetLemmatizer()
         # Train the chatbot with the provided text
         print("Training...")
-        words = re.findall(r"[\w']+|[.!?]", text.lower())
+        words = re.findall(r"[\w']+|[.!?]", text)
         words = [lemmatizer.lemmatize(word) for word in words]
         words_bigrams = list(bigrams(words))
         for i in range(len(words_bigrams)):
