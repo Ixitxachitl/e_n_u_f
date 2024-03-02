@@ -28,7 +28,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['','']
+TARGET_CHANNEL = ['']
 
 
 def get_wordnet_pos(word):
@@ -108,9 +108,13 @@ class MarkovChatbot:
                     stop_reason = "Decided not to continue generation"
                     break
 
-                    # Keep generating a word until it's not an eos_token if it's the first word
+                # Keep generating a word until it's not an eos_token if it's the first word
                 while True:
                     next_word = random.choice(possible_transitions)
+                    # if all possible transitions are eos tokens
+                    if all(word in eos_tokens for word in possible_transitions):
+                        break
+                    # if it's not the first word, or it's not an eos token
                     if new_words or next_word not in eos_tokens:
                         break
 
@@ -120,7 +124,7 @@ class MarkovChatbot:
                 next_word = re.sub(' +', ' ', next_word)
                 new_words.append(space + next_word.strip())
                 current_state = tuple((*current_state[1:], next_word))
-                if next_word in eos_tokens:
+                if new_words and next_word in eos_tokens:
                     stop_reason = "Hit end-of-sentence token"
                     break
             generated_words = new_words
@@ -142,7 +146,7 @@ class ChatBotHandler:
         print('Bot is ready for work, joining channels')
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=55):
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
