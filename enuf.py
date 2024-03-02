@@ -112,8 +112,11 @@ class MarkovChatbot:
                 while True:
                     next_word = random.choice(possible_transitions)
                     # if all possible transitions are eos tokens
-                    if all(word in eos_tokens for word in possible_transitions):
-                        break
+                    if all(word in eos_tokens for word in possible_transitions) and not new_words:
+                        print("Only EOS tokens available as the first word. Selecting a new state.")
+                        current_state = random.choice(list(self.transitions.keys()))
+                        possible_transitions = self.transitions[current_state]
+                        continue
                     # if it's not the first word, or it's not an eos token
                     if new_words or next_word not in eos_tokens:
                         break
@@ -124,7 +127,7 @@ class MarkovChatbot:
                 next_word = re.sub(' +', ' ', next_word)
                 new_words.append(space + next_word.strip())
                 current_state = tuple((*current_state[1:], next_word))
-                if new_words and next_word in eos_tokens:
+                if next_word in eos_tokens:
                     stop_reason = "Hit end-of-sentence token"
                     break
             generated_words = new_words
