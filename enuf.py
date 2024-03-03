@@ -44,6 +44,16 @@ def get_wordnet_pos(word):
     return tag_dict.get(tag, wordnet.NOUN)  # Return the corresponding WordNet POS tag
 
 
+def get_tense(word):
+    pos = nltk.pos_tag([word])[0][1]
+    if pos in ['VBD', 'VBG', 'VBN']:  # This checks for past tense
+        return 'past'
+    elif pos in ['VB', 'VBZ', 'VBP']:  # This checks for present tense
+        return 'present'
+    else:
+        return None
+
+
 def custom_lemmatizer(nlp_doc):
     lemmas = []
     for token in nlp_doc:
@@ -92,6 +102,15 @@ class MarkovChatbot:
             append_file.write(text + '\n')
 
     def generate(self, input_text, max_length=20):
+        coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
+        prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under', 'before', 'after', 'between',
+                        'into',
+                        'through', 'during', 'without', 'about', 'against', 'among', 'around', 'above', 'below',
+                        'along',
+                        'since', 'toward', 'upon'}
+
+        invalid_start_words = coord_conjunctions.union(prepositions)
+
         print("Generating response...")
         split_input_text = [token.lemma_ for token in nlp(input_text)]  # use spacy here for lemmatization
         current_order = min(self.order, len(split_input_text))
@@ -125,20 +144,36 @@ class MarkovChatbot:
                 # Keep generating a word until it's not an eos_token if it's the first word
                 while True:
                     next_word = random.choice(possible_transitions)
-                    # if all possible transitions are eos tokens
-                    if all(word in eos_tokens for word in possible_transitions) and not new_words:
-                        print("Only EOS tokens available as the first word. Selecting a new state.")
+                    # if all possible transitions are eos tokens or invalid start words
+                    if (all(word in eos_tokens for word in possible_transitions) or all(
+                            word in invalid_start_words for word in possible_transitions)) and not new_words:
+                        print(
+                            "Only EOS tokens or invalid start words available as the first word. Selecting a new state.")
                         current_state = random.choice(list(self.transitions.keys()))
                         possible_transitions = self.transitions[current_state]
                         continue
-                    # if it's not the first word, or it's not an eos token
-                    if new_words or next_word not in eos_tokens:
+                    # if it's not the first word, or it's not an eos token or invalid start word
+                    if new_words or (next_word not in eos_tokens and next_word not in invalid_start_words):
                         break
 
-                print(f"Adding next word '{next_word}' to the new words.")
+                print(f"Chosen transition from '{current_state}' is '{next_word}'")
 
                 space = "" if next_word in eos_tokens else " "
                 next_word = re.sub(' +', ' ', next_word)
+
+                # Check if the word is 'be'
+                if next_word == 'be':
+                    # Check the tense of the previous word in generated sentence
+                    if len(new_words) > 0:
+                        last_word_tense = get_tense(new_words[-1])
+                        # Make verb 'be' agree with tense of previous word
+                        if last_word_tense == 'past':
+                            next_word = 'was'
+                        elif last_word_tense == 'present':
+                            next_word = 'is'
+                        else:
+                            next_word = 'be'
+
                 new_words.append(space + next_word.strip())
                 current_state = tuple((*current_state[1:], next_word))
                 if next_word in eos_tokens:
@@ -163,7 +198,7 @@ class ChatBotHandler:
         print('Bot is ready for work, joining channels')
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=55):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=10):
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
@@ -174,8 +209,10 @@ class ChatBotHandler:
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
 
         # Calculate respond probability
-        x = (self.message_counter[msg.room.name] - 1) / max_messages
-        respond_probability = max(0, math.pow(1.2, x) - 1)  # using max to avoid negative probability at x=0
+        a = 10  # adjust this to make the function steeper
+        b = -a * 0.9  # adjust this to move the step point
+        x = a * (self.message_counter[msg.room.name] / max_messages) + b
+        respond_probability = 1 / (1 + math.exp(-x))
         print(f'Respond probability in {msg.room.name}: {respond_probability}')
 
         # Generate a response if random value is less than respond probability
