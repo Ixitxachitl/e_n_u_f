@@ -108,8 +108,8 @@ class MarkovChatbot:
                         'through', 'during', 'without', 'about', 'against', 'among', 'around', 'above', 'below',
                         'along',
                         'since', 'toward', 'upon'}
-
-        invalid_start_words = coord_conjunctions.union(prepositions)
+        number_words = set(map(str, range(10)))  # new set that contains number words
+        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words)
 
         print("Generating response...")
         split_input_text = [token.lemma_ for token in nlp(input_text)]  # use spacy here for lemmatization
@@ -198,7 +198,7 @@ class ChatBotHandler:
         print('Bot is ready for work, joining channels')
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=10):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
