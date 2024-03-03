@@ -5,12 +5,13 @@ import math
 import os
 import random
 import re
+import spacy
+# python -m spacy download en_core_web_sm
 from typing import Dict
 
 import nltk
-from nltk import bigrams
-from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet
+# python -m nltk.downloader averaged_perceptron_tagger wordnet
 from twitchAPI.chat import Chat, EventData, ChatMessage
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.twitch import Twitch
@@ -30,6 +31,8 @@ REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
 TARGET_CHANNEL = ['']
 
+nlp = spacy.load('en_core_web_sm')  # spacy's English model
+
 
 def get_wordnet_pos(word):
     tag = nltk.pos_tag([word])[0][1][0].upper()  # Get the first letter of the POS tag
@@ -41,12 +44,21 @@ def get_wordnet_pos(word):
     return tag_dict.get(tag, wordnet.NOUN)  # Return the corresponding WordNet POS tag
 
 
+def custom_lemmatizer(nlp_doc):
+    lemmas = []
+    for token in nlp_doc:
+        if token.pos_ != "NOUN":  # Only lemmatize non-nouns
+            lemmas.append(token.lemma_)
+        else:
+            lemmas.append(token.text)
+    return lemmas
+
+
 class MarkovChatbot:
     def __init__(self, room_name, order=2):
         self.order = order
         self.transitions = collections.defaultdict(list)
         self.data_file = f"{room_name}.txt"
-        self.lemmatizer = WordNetLemmatizer()  # Instantiate the lemmatizer here
         self.load_and_train()
 
     def load_and_train(self):
@@ -62,13 +74,13 @@ class MarkovChatbot:
         print("Training Completed!")
 
     def train(self, text):
-        # Train the chatbot with the provided text
         print("Training...")
-        words = re.findall(r"[\w']+|[.!?]", text)  # Updated line
-        words = [self.lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in words]
-        words_bigrams = list(bigrams(words))
-        for i in range(len(words_bigrams)):
-            current_state = tuple(words_bigrams[i])
+        words = re.findall(r"[\w']+|[.!?]", text)
+        words = custom_lemmatizer(nlp(' '.join(words)))  # Call to custom lemmatizer
+
+        # Instead of creating a list of bigrams, we'll create them on-the-fly in the loop
+        for i in range(len(words) - 1):
+            current_state = (words[i], words[i + 1])
             if i + 2 < len(words):
                 next_word = words[i + 2]
                 self.transitions[current_state].append(next_word)
@@ -81,14 +93,16 @@ class MarkovChatbot:
 
     def generate(self, input_text, max_length=20):
         print("Generating response...")
-        split_input_text = [self.lemmatizer.lemmatize(word.lower()) for word in input_text.split()]
+        split_input_text = [token.lemma_ for token in nlp(input_text)]  # use spacy here for lemmatization
         current_order = min(self.order, len(split_input_text))
         current_state = tuple(split_input_text[-current_order:])
         generated_words = []
         eos_tokens = {'.', '!', '?'}
+        stop_reason = 'Unknown'
 
         while not generated_words:
             new_words = []
+
             while True:
                 if current_state not in self.transitions or not self.transitions[current_state]:
                     print(
