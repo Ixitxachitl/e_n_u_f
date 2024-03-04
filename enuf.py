@@ -2,7 +2,9 @@ import asyncio
 import collections
 import configparser
 import math
+import numpy as np
 import os
+import pickle
 import random
 import re
 import spacy
@@ -44,20 +46,11 @@ def get_wordnet_pos(word):
     return tag_dict.get(tag, wordnet.NOUN)  # Return the corresponding WordNet POS tag
 
 
-def get_tense(word):
-    pos = nltk.pos_tag([word])[0][1]
-    if pos in ['VBD', 'VBG', 'VBN']:  # This checks for past tense
-        return 'past'
-    elif pos in ['VB', 'VBZ', 'VBP']:  # This checks for present tense
-        return 'present'
-    else:
-        return None
-
-
 def custom_lemmatizer(nlp_doc):
     lemmas = []
+    forms_of_be = {"be", "is", "am", "are", "was", "were", "been", "being"}  # Add all forms of 'be' here
     for token in nlp_doc:
-        if token.pos_ != "NOUN":  # Only lemmatize non-nouns
+        if token.pos_ != "NOUN" and token.lemma_ not in forms_of_be:  # Only lemmatize non-nouns that are not 'be'
             lemmas.append(token.lemma_)
         else:
             lemmas.append(token.text)
@@ -67,13 +60,21 @@ def custom_lemmatizer(nlp_doc):
 class MarkovChatbot:
     def __init__(self, room_name, order=2):
         self.order = order
-        self.transitions = collections.defaultdict(list)
+        self.transitions = collections.defaultdict(collections.Counter)
         self.data_file = f"{room_name}.txt"
+        self.pickle_file = f"{room_name}.pickle"
         self.load_and_train()
 
     def load_and_train(self):
-        # Load existing training data from the data file if it exists and train chatbot
         print("Loading and Training...")
+        if os.path.exists(self.pickle_file):
+            with open(self.pickle_file, "rb") as file:
+                self.transitions = pickle.load(file)
+        else:
+            self.train_from_data_file()
+        print("Training Completed!")
+
+    def train_from_data_file(self):
         if os.path.exists(self.data_file):
             with open(self.data_file, "r", encoding="utf-8") as file:
                 data = file.readlines()
@@ -81,106 +82,99 @@ class MarkovChatbot:
                 self.train(line.strip())
         else:
             print(f"No data file found at location: {self.data_file}")
-        print("Training Completed!")
 
     def train(self, text):
         print("Training...")
-        words = re.findall(r"[\w']+|[.!?]", text)
+        # Regular expression to match words that may include an apostrophe or a punctuation character.
+        # \b: word boundary.
+        # \w: a word character (equivalent to [a-zA-Z0-9_]).
+        # [\w']*: any sequence of word characters and/or apostrophes.
+        # \b\w[\w']*\b: a whole word that may include an apostrophe.
+        # | : OR operator.
+        # [.!?]: a punctuation character.
+        # PUTTING IT ALL TOGETHER: a word (which may contain an apostrophe) OR a punctuation character.
+        words = re.findall(r"\b\w[\w']*\b|[.!?]", text)
         words = custom_lemmatizer(nlp(' '.join(words)))  # Call to custom lemmatizer
 
-        # Instead of creating a list of bigrams, we'll create them on-the-fly in the loop
-        for i in range(len(words) - 1):
-            current_state = (words[i], words[i + 1])
-            if i + 2 < len(words):
-                next_word = words[i + 2]
-                self.transitions[current_state].append(next_word)
+        for i in range(len(words) - self.order):
+            current_state = tuple(words[i: i + self.order])
+            next_word = words[i + self.order]
+            self.transitions[current_state][next_word] = self.transitions[current_state].get(next_word, 0) + 1
 
     def append_data(self, text):
-        # Append new training data to the data file
         print("Appending data...")
         with open(self.data_file, "a", encoding="utf-8") as append_file:
             append_file.write(text + '\n')
+        self.train(text)
+        with open(self.pickle_file, "wb") as pickleFile:
+            pickle.dump(self.transitions, pickleFile)
 
-    def generate(self, input_text, max_length=20):
+    def generate(self, input_text, min_length=5, max_length=20):
         coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
-        prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under', 'before', 'after', 'between',
-                        'into',
-                        'through', 'during', 'without', 'about', 'against', 'among', 'around', 'above', 'below',
-                        'along',
-                        'since', 'toward', 'upon'}
-        number_words = set(map(str, range(10)))  # new set that contains number words
+        prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
+                        'before', 'after', 'between', 'into', 'through', 'during',
+                        'without', 'about', 'against', 'among', 'around', 'above',
+                        'below', 'along', 'since', 'toward', 'upon'}
+        number_words = set(map(str, range(10)))
         invalid_start_words = coord_conjunctions.union(prepositions).union(number_words)
 
-        print("Generating response...")
-        split_input_text = [token.lemma_ for token in nlp(input_text)]  # use spacy here for lemmatization
+        split_input_text = [token.lemma_ for token in nlp(input_text)]
         current_order = min(self.order, len(split_input_text))
         current_state = tuple(split_input_text[-current_order:])
         generated_words = []
         eos_tokens = {'.', '!', '?'}
-        stop_reason = 'Unknown'
+        stop_reason = ''
 
         while not generated_words:
             new_words = []
 
             while True:
                 if current_state not in self.transitions or not self.transitions[current_state]:
-                    print(
-                        f"Current state '{current_state}' not in transitions or has no valid transitions. Selecting a random state.")
                     current_state = random.choice(list(self.transitions.keys()))
+                    print(f"Chose a new current state: {current_state}")
 
                 possible_transitions = self.transitions[current_state]
+
                 scale_factor = len(new_words) / max_length
-                if len(new_words) > 0:
-                    continuation_probability = math.exp(-0.1 * scale_factor)
-                else:
-                    continuation_probability = 1.0
-                print(f"Continuation probability: {continuation_probability}")
+                continuation_probability = math.exp(-0.1 * scale_factor)
+
                 continue_generation = \
                     random.choices([True, False], weights=[continuation_probability, 1 - continuation_probability])[0]
+
                 if not continue_generation:
                     stop_reason = "Decided not to continue generation"
                     break
 
-                # Keep generating a word until it's not an eos_token if it's the first word
-                while True:
-                    next_word = random.choice(possible_transitions)
-                    # if all possible transitions are eos tokens or invalid start words
-                    if (all(word in eos_tokens for word in possible_transitions) or all(
-                            word in invalid_start_words for word in possible_transitions)) and not new_words:
-                        print(
-                            "Only EOS tokens or invalid start words available as the first word. Selecting a new state.")
-                        current_state = random.choice(list(self.transitions.keys()))
-                        possible_transitions = self.transitions[current_state]
-                        continue
-                    # if it's not the first word, or it's not an eos token or invalid start word
-                    if new_words or (next_word not in eos_tokens and next_word not in invalid_start_words):
-                        break
+                if all(word in invalid_start_words or word in eos_tokens for word in possible_transitions.keys()):
+                    current_state = random.choice(list(self.transitions.keys()))
+                    print(f"All possible transitions were invalid, chose a new current state: {current_state}")
+                    continue
 
-                print(f"Chosen transition from '{current_state}' is '{next_word}'")
+                next_word = np.random.choice(list(possible_transitions.keys()),
+                                             p=[freq / sum(possible_transitions.values()) for freq in
+                                                possible_transitions.values()])
 
-                space = "" if next_word in eos_tokens else " "
-                next_word = re.sub(' +', ' ', next_word)
+                print(f"Chose transition from '{current_state}' to '{next_word}'")
 
-                # Check if the word is 'be'
-                if next_word == 'be':
-                    # Check the tense of the previous word in generated sentence
-                    if len(new_words) > 0:
-                        last_word_tense = get_tense(new_words[-1])
-                        # Make verb 'be' agree with tense of previous word
-                        if last_word_tense == 'past':
-                            next_word = 'was'
-                        elif last_word_tense == 'present':
-                            next_word = 'is'
-                        else:
-                            next_word = 'be'
+                if len(new_words) == 0 and next_word in invalid_start_words:
+                    print(f"The chosen word '{next_word}' is an invalid start word, restarting selection.")
+                    continue
 
-                new_words.append(space + next_word.strip())
+                space = "" if (next_word in eos_tokens or next_word.startswith("'")) else " "
+
+                new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
                 current_state = tuple((*current_state[1:], next_word))
+
                 if next_word in eos_tokens:
                     stop_reason = "Hit end-of-sentence token"
                     break
+
+                if len(new_words) >= max_length:
+                    stop_reason = "Reached maximum length"
+                    break
+
             generated_words = new_words
-            print(f"Generated words '{generated_words}'.")
+
         generated_message = ''.join(generated_words).lstrip()
         print(f"Final message: '{generated_message}'")
         print(f"Reason for stopping: {stop_reason}")
@@ -192,25 +186,29 @@ class ChatBotHandler:
         self.chatbots = {}
         # Initialize the message counter as empty dictionary
         self.message_counter: Dict[str, int] = {}
+        # Initialize ignore_users list
+        self.ignore_users = ['streamelements', 'nightbot', 'soundalerts','buttsbot','sery_bot',
+                             'pokemoncommunitygame','elbierro']
 
     @staticmethod
     async def handle_bot_startup(ready_event: EventData):
         print('Bot is ready for work, joining channels')
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=3):
+        if msg.user.name in self.ignore_users:
+            return
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
         self.chatbots[msg.room.name].append_data(msg.text)
-        self.chatbots[msg.room.name].train(msg.text)
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
 
         # Calculate respond probability
-        a = 10  # adjust this to make the function steeper
-        b = -a * 0.9  # adjust this to move the step point
+        a = 40  # adjust this to make the function steeper
+        b = -a * 0.8  # adjust this to move the step point
         x = a * (self.message_counter[msg.room.name] / max_messages) + b
         respond_probability = 1 / (1 + math.exp(-x))
         print(f'Respond probability in {msg.room.name}: {respond_probability}')
