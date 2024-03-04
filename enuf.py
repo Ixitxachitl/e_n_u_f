@@ -34,6 +34,7 @@ USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
 TARGET_CHANNEL = ['']
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
+nlp_dict = set(w.lower_ for w in nlp.vocab)
 
 
 def get_wordnet_pos(word):
@@ -51,7 +52,8 @@ def custom_lemmatizer(nlp_doc):
     forms_of_be = {"be", "is", "am", "are", "was", "were", "been", "being"}  # Add all forms of 'be' here
     for token in nlp_doc:
         if token.pos_ != "NOUN" and token.lemma_ not in forms_of_be:  # Only lemmatize non-nouns that are not 'be'
-            lemmas.append(token.lemma_)
+            # Only lemmatize if word exists in the dictionary
+            lemmas.append(token.lemma_ if token.text.lower() in nlp_dict else token.text)
         else:
             lemmas.append(token.text)
     return lemmas
@@ -195,7 +197,7 @@ class ChatBotHandler:
         print('Bot is ready for work, joining channels')
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=3):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         if msg.user.name in self.ignore_users:
             return
         print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
