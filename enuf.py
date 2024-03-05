@@ -19,7 +19,6 @@ from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.twitch import Twitch
 from twitchAPI.type import AuthScope, ChatEvent
 
-
 # read config.ini file
 config_object = configparser.ConfigParser()
 config_object.read("config.ini")
@@ -31,10 +30,14 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['']
+TARGET_CHANNEL = ['drkrdnk']
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
 nlp_dict = set(w.lower_ for w in nlp.vocab)
+
+def print_line(text, line_num):
+    print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
+    print('\033[{};0H'.format(line_num) + text)  # write your text at the start of the cleared line
 
 
 def get_wordnet_pos(word):
@@ -68,13 +71,13 @@ class MarkovChatbot:
         self.load_and_train()
 
     def load_and_train(self):
-        print("Loading and Training...")
+        print_line("Loading and Training...", 5)
         if os.path.exists(self.pickle_file):
             with open(self.pickle_file, "rb") as file:
                 self.transitions = pickle.load(file)
         else:
             self.train_from_data_file()
-        print("Training Completed!")
+        print_line("Loading Completed!", 5)
 
     def train_from_data_file(self):
         if os.path.exists(self.data_file):
@@ -83,10 +86,10 @@ class MarkovChatbot:
             for line in data:
                 self.train(line.strip())
         else:
-            print(f"No data file found at location: {self.data_file}")
+            print_line(f"No data file found at location: {self.data_file}", 5)
 
     def train(self, text):
-        print("Training...")
+        print_line("Training...", 5)
         # Regular expression to match words that may include an apostrophe or a punctuation character.
         # \b: word boundary.
         # \w: a word character (equivalent to [a-zA-Z0-9_]).
@@ -102,9 +105,10 @@ class MarkovChatbot:
             current_state = tuple(words[i: i + self.order])
             next_word = words[i + self.order]
             self.transitions[current_state][next_word] = self.transitions[current_state].get(next_word, 0) + 1
+        print_line("Training Completed!", 5)
 
     def append_data(self, text):
-        print("Appending data...")
+        print_line("Appending data...", 5)
         with open(self.data_file, "a", encoding="utf-8") as append_file:
             append_file.write(text + '\n')
         self.train(text)
@@ -132,16 +136,18 @@ class MarkovChatbot:
 
             while True:
                 if current_state not in self.transitions or not self.transitions[current_state]:
+                    print_line(f"No transitions for {current_state}", 6)
                     current_state = random.choice(list(self.transitions.keys()))
-                    print(f"Chose a new current state: {current_state}")
+                    print_line(f"Chose a new current state: {current_state}", 7)
 
                 possible_transitions = self.transitions[current_state]
 
-                scale_factor = len(new_words) / max_length
-                continuation_probability = math.exp(-0.1 * scale_factor)
-
-                continue_generation = \
-                    random.choices([True, False], weights=[continuation_probability, 1 - continuation_probability])[0]
+                x = len(new_words)
+                continuation_probability = 1 - math.exp((x - max_length) / 5)
+                print_line(f"Continuation Probability: {round(continuation_probability*100)}%", 9)
+                continue_generation = random.choices(
+                    [True, False], weights=[continuation_probability, 1 - continuation_probability]
+                )[0]
 
                 if not continue_generation:
                     stop_reason = "Decided not to continue generation"
@@ -149,22 +155,25 @@ class MarkovChatbot:
 
                 if all(word in invalid_start_words or word in eos_tokens for word in possible_transitions.keys()):
                     current_state = random.choice(list(self.transitions.keys()))
-                    print(f"All possible transitions were invalid, chose a new current state: {current_state}")
+                    print_line(f"All possible transitions were invalid, chose a new current state: {current_state}", 10)
                     continue
 
                 next_word = np.random.choice(list(possible_transitions.keys()),
                                              p=[freq / sum(possible_transitions.values()) for freq in
                                                 possible_transitions.values()])
 
-                print(f"Chose transition from '{current_state}' to '{next_word}'")
+                print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
                 if len(new_words) == 0 and next_word in invalid_start_words:
-                    print(f"The chosen word '{next_word}' is an invalid start word, restarting selection.")
+                    print_line(f"The chosen word '{next_word}' is an invalid start word, restarting selection.", 10)
                     continue
 
                 space = "" if (next_word in eos_tokens or next_word.startswith("'")) else " "
 
-                new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
+                # Only add the next word if it is not an eos token or if min length has been reached
+                if not (next_word in eos_tokens and len(new_words) < min_length):
+                    new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
+
                 current_state = tuple((*current_state[1:], next_word))
 
                 if next_word in eos_tokens:
@@ -178,8 +187,8 @@ class MarkovChatbot:
             generated_words = new_words
 
         generated_message = ''.join(generated_words).lstrip()
-        print(f"Final message: '{generated_message}'")
-        print(f"Reason for stopping: {stop_reason}")
+        print_line(f"Final message: '{generated_message}'", 11)
+        print_line(f"Reason for stopping: {stop_reason}", 12)
         return generated_message
 
 
@@ -194,13 +203,13 @@ class ChatBotHandler:
 
     @staticmethod
     async def handle_bot_startup(ready_event: EventData):
-        print('Bot is ready for work, joining channels')
+        print_line(f'Bot is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
     async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         if msg.user.name in self.ignore_users:
             return
-        print(f'In {msg.room.name}, {msg.user.name}: {msg.text}')
+        print_line(f'In {msg.room.name}, {msg.user.name}: {msg.text}', 1)
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
@@ -209,19 +218,17 @@ class ChatBotHandler:
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
 
         # Calculate respond probability
-        a = 40  # adjust this to make the function steeper
-        b = -a * 0.8  # adjust this to move the step point
-        x = a * (self.message_counter[msg.room.name] / max_messages) + b
-        respond_probability = 1 / (1 + math.exp(-x))
-        print(f'Respond probability in {msg.room.name}: {respond_probability}')
+        x = self.message_counter[msg.room.name]
+        respond_probability = np.exp((x - max_messages) / 4)
+        print_line(f'Respond probability in {msg.room.name}: {round(respond_probability*100)}%', 2)
 
         # Generate a response if random value is less than respond probability
         random_val = random.random()
-        print(f'Random value: {random_val}')
+        print_line(f'Rolled: {round(random_val*100)}', 3)
 
         if random_val < respond_probability:
             response = self.chatbots[msg.room.name].generate(msg.text)
-            print(f'Generated in {msg.room.name}: {response}')
+            print_line(f'Generated in {msg.room.name}: {response}', 4)
             if random.random() < 0.05:
                 await msg.reply(response)
             else:
@@ -255,7 +262,7 @@ async def run(oauth_token='', refresh_token=''):
     chat.start()
 
     try:
-        input('press ENTER to stop\n')
+        input()
     finally:
         chat.stop()
         await twitch.close()
