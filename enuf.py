@@ -30,10 +30,11 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['drkrdnk']
+TARGET_CHANNEL = ['firstnamebutt']
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
 nlp_dict = set(w.lower_ for w in nlp.vocab)
+
 
 def print_line(text, line_num):
     print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
@@ -98,8 +99,7 @@ class MarkovChatbot:
         # | : OR operator.
         # [.!?]: a punctuation character.
         # PUTTING IT ALL TOGETHER: a word (which may contain an apostrophe) OR a punctuation character.
-        words = re.findall(r"\b\w[\w']*\b|[.!?]", text)
-        words = custom_lemmatizer(nlp(' '.join(words)))  # Call to custom lemmatizer
+        words = custom_lemmatizer(nlp(text))  # Call to custom lemmatizer
 
         for i in range(len(words) - self.order):
             current_state = tuple(words[i: i + self.order])
@@ -116,13 +116,34 @@ class MarkovChatbot:
             pickle.dump(self.transitions, pickleFile)
 
     def generate(self, input_text, min_length=5, max_length=20):
+        """
+        This function generates a message based on the Markov model.
+
+        Steps:
+        1. Define invalid start and end words for a sentence
+        2. Lemmatize the input text and set the initial state of the Markov model
+        3. Initialize an empty list to hold the generated words
+        4. In a loop:
+            - If no transitions for the current state exist in the model, choose a new current state randomly
+            - Determine whether to continue generating words based on the length of the generated sentence
+              and a probabilistic condition
+            - Choose the next word based on the transitions probabilities and validation checks
+            - Update the current state, adding the chosen word and discarding the oldest word from it
+            - Break the loop when an end-of-sentence token is reached, or when the maximum sentence length
+              is reached, or when the probabilistic condition to stop generating words is met
+        5. Check the last word of the created sentence, and if it's invalid, replace it with a valid one
+        6. Concatenate the generated words to create the output message
+        7. Return the generated message
+        """
         coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
         prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
                         'before', 'after', 'between', 'into', 'through', 'during',
                         'without', 'about', 'against', 'among', 'around', 'above',
                         'below', 'along', 'since', 'toward', 'upon'}
+        invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'and', 'or', 'because'}
         number_words = set(map(str, range(10)))
         invalid_start_words = coord_conjunctions.union(prepositions).union(number_words)
+        invalid_end_words = coord_conjunctions.union(invalid_end_words)
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
         current_order = min(self.order, len(split_input_text))
@@ -164,11 +185,11 @@ class MarkovChatbot:
 
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
-                if len(new_words) == 0 and next_word in invalid_start_words:
+                if len(new_words) == 0 and (next_word in invalid_start_words or next_word.startswith("'")):
                     print_line(f"The chosen word '{next_word}' is an invalid start word, restarting selection.", 10)
                     continue
 
-                space = "" if (next_word in eos_tokens or next_word.startswith("'")) else " "
+                space = "" if (next_word in eos_tokens or next_word.startswith("'") or next_word == ",") else " "
 
                 # Only add the next word if it is not an eos token or if min length has been reached
                 if not (next_word in eos_tokens and len(new_words) < min_length):
@@ -184,6 +205,27 @@ class MarkovChatbot:
                     stop_reason = "Reached maximum length"
                     break
 
+            last_word = None
+            if new_words and new_words[-1] in invalid_end_words:
+                # Replace last word which is an invalid end word
+
+                # Check if the current state has any valid end words
+                valid_end_words_in_state = [word for word in possible_transitions.keys() if
+                                            word not in invalid_end_words]
+                if valid_end_words_in_state:
+                    # If there are valid end words in the current state, choose one of them
+                    last_word = np.random.choice(valid_end_words_in_state)
+                else:
+                    # If not, choose a new random state and pick a word from there
+                    while last_word is None or last_word in invalid_end_words:
+                        current_state = random.choice(list(self.transitions.keys()))
+                        possible_transitions = self.transitions[current_state]
+                        last_word = np.random.choice(list(possible_transitions.keys()),
+                                                     p=[freq / sum(possible_transitions.values()) for freq in
+                                                        possible_transitions.values()])
+
+                new_words[-1] = last_word
+
             generated_words = new_words
 
         generated_message = ''.join(generated_words).lstrip()
@@ -198,7 +240,7 @@ class ChatBotHandler:
         # Initialize the message counter as empty dictionary
         self.message_counter: Dict[str, int] = {}
         # Initialize ignore_users list
-        self.ignore_users = ['streamelements', 'nightbot', 'soundalerts','buttsbot','sery_bot',
+        self.ignore_users = ['streamelements', 'streamlabs', 'nightbot', 'soundalerts','buttsbot','sery_bot',
                              'pokemoncommunitygame','elbierro']
 
     @staticmethod
