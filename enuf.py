@@ -30,7 +30,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['firstnamebutt']
+TARGET_CHANNEL = ['']
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
 nlp_dict = set(w.lower_ for w in nlp.vocab)
