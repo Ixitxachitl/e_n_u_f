@@ -107,10 +107,6 @@ class MarkovChatbot:
         print_line("Loading Completed!", 5)
 
     def train_from_data_file(self):
-        # Connect to SQLite database
-        conn = sqlite3.connect('chatbot_db.sqlite')
-        cursor = conn.cursor()
-
         # Get texts from data_file table for room
         self.cursor.execute("""
             SELECT data FROM data_file_table WHERE room_name = ?
@@ -175,11 +171,15 @@ class MarkovChatbot:
         3. Initialize an empty list to hold the generated words.
         4. Loop through:
             - If the current state has no transitions in the model, select a new current state randomly.
-            - Determine whether to continue generating words based on the length of the generated sentence and a probabilistic condition.
-            - Choose the next word based on transition probabilities. If the next word could potentially be the last and it is an invalid end word, continue choosing a new next word until a valid end word is chosen.
+            - Determine whether to continue generating words based on the length of the generated sentence and a
+              probabilistic condition.
+            - Choose the next word based on transition probabilities. If the next word could potentially be the last,
+              and it is an invalid end word, continue choosing a new next word until a valid end word is chosen.
             - Update the current state, adding the chosen word and discarding the oldest word from it.
-            - Break the loop either when an end-of-sentence token is reached, the maximum sentence length is reached, or the probabilistic condition to stop generating words is met.
-        5. Concatenate the generated words to create the output message, ensuring that the last word is not an invalid end word.
+            - Break the loop either when an end-of-sentence token is reached, the maximum sentence length is reached, or
+              the probabilistic condition to stop generating words is met.
+        5. Concatenate the generated words to create the output message, ensuring that the last word is not an invalid
+           end word.
         6. Return the generated message.
         """
 
@@ -271,7 +271,8 @@ class MarkovChatbot:
         print_line(f"Final message: '{generated_message}'", 11)
         return generated_message
 
-    def create_connection(self):
+    @staticmethod
+    def create_connection():
         conn = None
         try:
             # This will create a new database if it doesn't exist
