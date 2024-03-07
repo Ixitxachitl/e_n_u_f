@@ -19,6 +19,9 @@ from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.twitch import Twitch
 from twitchAPI.type import AuthScope, ChatEvent
 
+import sqlite3
+from sqlite3 import Error
+
 # read config.ini file
 config_object = configparser.ConfigParser()
 config_object.read("config.ini")
@@ -30,7 +33,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['']
+TARGET_CHANNEL = ['katmakes','thejameskz']
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
 nlp_dict = set(w.lower_ for w in nlp.vocab)
@@ -67,80 +70,119 @@ class MarkovChatbot:
     def __init__(self, room_name, order=2):
         self.order = order
         self.transitions = collections.defaultdict(collections.Counter)
-        self.data_file = f"{room_name}.txt"
-        self.pickle_file = f"{room_name}.pickle"
-        self.load_and_train()
+        self.room_name = room_name
+        self.connection = self.create_connection()
+        if self.connection is not None:
+            self.cursor = self.connection.cursor()
+            self.create_table()
 
     def load_and_train(self):
         print_line("Loading and Training...", 5)
-        if os.path.exists(self.pickle_file):
-            with open(self.pickle_file, "rb") as file:
-                self.transitions = pickle.load(file)
-        else:
+
+        # Get transitions from transitions table for room
+        self.cursor.execute("""
+            SELECT current_state, next_word, count FROM transitions_table WHERE room_name = ?
+        """, (self.room_name,))
+        rows = self.cursor.fetchall()
+
+        # Build transitions dictionary from result rows
+        self.transitions = collections.defaultdict(collections.Counter)
+        for row in rows:
+            current_state = tuple(row[0].split(','))
+            next_word = row[1]
+            count = row[2]
+            self.transitions[current_state][next_word] += count
+
+        # If we didn't retrieve any transitions, train from data file
+        if len(self.transitions) == 0:
             self.train_from_data_file()
+
         print_line("Loading Completed!", 5)
 
     def train_from_data_file(self):
-        if os.path.exists(self.data_file):
-            with open(self.data_file, "r", encoding="utf-8") as file:
-                data = file.readlines()
-            for line in data:
-                self.train(line.strip())
+        # Connect to SQLite database
+        conn = sqlite3.connect('chatbot_db.sqlite')
+        cursor = conn.cursor()
+
+        # Get texts from data_file table for room
+        self.cursor.execute("""
+            SELECT data FROM data_file_table WHERE room_name = ?
+        """, (self.room_name,))
+        rows = self.cursor.fetchall()
+
+        if rows:
+            for row in rows:
+                self.train(row[0].strip())
         else:
-            print_line(f"No data file found at location: {self.data_file}", 5)
+            print_line(f"No data found for room: {self.room_name}", 5)
 
     def train(self, text):
         print_line("Training...", 5)
-        # Regular expression to match words that may include an apostrophe or a punctuation character.
-        # \b: word boundary.
-        # \w: a word character (equivalent to [a-zA-Z0-9_]).
-        # [\w']*: any sequence of word characters and/or apostrophes.
-        # \b\w[\w']*\b: a whole word that may include an apostrophe.
-        # | : OR operator.
-        # [.!?]: a punctuation character.
-        # PUTTING IT ALL TOGETHER: a word (which may contain an apostrophe) OR a punctuation character.
+
         words = custom_lemmatizer(nlp(text))  # Call to custom lemmatizer
 
         for i in range(len(words) - self.order):
             current_state = tuple(words[i: i + self.order])
             next_word = words[i + self.order]
             self.transitions[current_state][next_word] = self.transitions[current_state].get(next_word, 0) + 1
+
+            # Insert or update transition into transitions_table in database
+            self.cursor.execute("""
+                INSERT OR REPLACE INTO transitions_table 
+                (room_name, current_state, next_word, count) 
+                VALUES (?, ?, ?, ?)
+            """, (self.room_name, ','.join(current_state), next_word, self.transitions[current_state][next_word]))
+
+        self.connection.commit()
         print_line("Training Completed!", 5)
 
     def append_data(self, text):
         print_line("Appending data...", 5)
-        with open(self.data_file, "a", encoding="utf-8") as append_file:
-            append_file.write(text + '\n')
+
+        # Insert text into data_file_table
+        self.cursor.execute("""
+            INSERT INTO data_file_table (room_name, data) VALUES (?, ?)
+        """, (self.room_name, text))
+
         self.train(text)
-        with open(self.pickle_file, "wb") as pickleFile:
-            pickle.dump(self.transitions, pickleFile)
+
+        # Insert transitions into transitions_table
+        for current_state, next_words in self.transitions.items():
+            for next_word, count in next_words.items():
+                self.cursor.execute("""
+                    REPLACE INTO transitions_table (room_name, current_state, next_word, count) VALUES (?, ?, ?, ?)
+                """, (self.room_name, ','.join(current_state), next_word, count))
+
+        # Committing transactions and closing the connection
+        self.connection.commit()
+
+        print_line("Appended data and updated transitions!", 5)
 
     def generate(self, input_text, min_length=5, max_length=20):
         """
         This function generates a message based on the Markov model.
 
         Steps:
-        1. Define invalid start and end words for a sentence
-        2. Lemmatize the input text and set the initial state of the Markov model
-        3. Initialize an empty list to hold the generated words
-        4. In a loop:
-            - If no transitions for the current state exist in the model, choose a new current state randomly
-            - Determine whether to continue generating words based on the length of the generated sentence
-              and a probabilistic condition
-            - Choose the next word based on the transitions probabilities and validation checks
-            - Update the current state, adding the chosen word and discarding the oldest word from it
-            - Break the loop when an end-of-sentence token is reached, or when the maximum sentence length
-              is reached, or when the probabilistic condition to stop generating words is met
-        5. Check the last word of the created sentence, and if it's invalid, replace it with a valid one
-        6. Concatenate the generated words to create the output message
-        7. Return the generated message
+        1. Define invalid start and end words for a sentence.
+        2. Lemmatize the input text and set the initial state of the Markov model.
+        3. Initialize an empty list to hold the generated words.
+        4. Loop through:
+            - If the current state has no transitions in the model, select a new current state randomly.
+            - Determine whether to continue generating words based on the length of the generated sentence and a probabilistic condition.
+            - Choose the next word based on transition probabilities. If the next word could potentially be the last and it is an invalid end word, continue choosing a new next word until a valid end word is chosen.
+            - Update the current state, adding the chosen word and discarding the oldest word from it.
+            - Break the loop either when an end-of-sentence token is reached, the maximum sentence length is reached, or the probabilistic condition to stop generating words is met.
+        5. Concatenate the generated words to create the output message, ensuring that the last word is not an invalid end word.
+        6. Return the generated message.
         """
+
         coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
         prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
                         'before', 'after', 'between', 'into', 'through', 'during',
                         'without', 'about', 'against', 'among', 'around', 'above',
                         'below', 'along', 'since', 'toward', 'upon'}
         invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'and', 'or', 'because'}
+
         number_words = set(map(str, range(10)))
         invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union({','})
         invalid_end_words = coord_conjunctions.union(invalid_end_words)
@@ -183,6 +225,13 @@ class MarkovChatbot:
                                              p=[freq / sum(possible_transitions.values()) for freq in
                                                 possible_transitions.values()])
 
+                # Check if next word is potentially the last, and if it's invalid pick another word
+                while (len(new_words) == max_length - 1 and next_word in invalid_end_words) or (
+                        continue_generation is False and next_word in invalid_end_words):
+                    next_word = np.random.choice(list(possible_transitions.keys()),
+                                                 p=[freq / sum(possible_transitions.values()) for freq in
+                                                    possible_transitions.values()])
+
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
                 if len(new_words) == 0 and (next_word in invalid_start_words or next_word.startswith("'")):
@@ -206,31 +255,46 @@ class MarkovChatbot:
                     break
 
             print_line(f"Reason for stopping: {stop_reason}", 12)
-            if new_words:
-                # Start with your last chosen word
-                last_word = new_words[-1]
-                # As long as the last word is invalid, keep looping to find a valid one
-                while last_word in invalid_end_words:
-                    valid_end_words_in_state = []
-                    # Loop until we find a state that has valid end words in its transitions
-                    while not valid_end_words_in_state:
-                        # Randomly select a new current state
-                        current_state = random.choice(list(self.transitions.keys()))
-                        # Derive the associated possible transitions for that state
-                        possible_transitions = self.transitions[current_state]
-                        # Check if there are any valid end words among possible transitions
-                        valid_end_words_in_state = [word for word in possible_transitions.keys() if
-                                                    word not in invalid_end_words]
-                    # Select a valid end word at random
-                    last_word = np.random.choice(valid_end_words_in_state)
-                # By the end of this loop, last_word should contain a valid end word
-                new_words[-1] = last_word
 
             generated_words = new_words
 
         generated_message = ''.join(generated_words).lstrip()
         print_line(f"Final message: '{generated_message}'", 11)
         return generated_message
+
+    def create_connection(self):
+        conn = None
+        try:
+            # This will create a new database if it doesn't exist
+            conn = sqlite3.connect('chatbot_db.sqlite')
+            print(f'Successful connection with sqlite version {sqlite3.version}')
+
+            return conn
+        except Exception as e:
+            print(f'The error {e} occurred')
+
+        return conn
+
+    def create_table(self):
+        # Create tables in the database if they do not exist
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_file_table (
+                id INTEGER PRIMARY KEY,
+                room_name TEXT NOT NULL,
+                data TEXT NOT NULL
+            )
+        """)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transitions_table (
+                id INTEGER PRIMARY KEY,
+                room_name TEXT NOT NULL,
+                current_state TEXT,
+                next_word TEXT,
+                count INT
+            )
+        """)
+        # Commit the transaction
+        self.connection.commit()
 
 
 class ChatBotHandler:
