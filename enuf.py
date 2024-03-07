@@ -142,7 +142,7 @@ class MarkovChatbot:
                         'below', 'along', 'since', 'toward', 'upon'}
         invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'and', 'or', 'because'}
         number_words = set(map(str, range(10)))
-        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words)
+        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union({','})
         invalid_end_words = coord_conjunctions.union(invalid_end_words)
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
@@ -205,32 +205,31 @@ class MarkovChatbot:
                     stop_reason = "Reached maximum length"
                     break
 
-            last_word = None
-            if new_words and new_words[-1] in invalid_end_words:
-                # Replace last word which is an invalid end word
-
-                # Check if the current state has any valid end words
-                valid_end_words_in_state = [word for word in possible_transitions.keys() if
-                                            word not in invalid_end_words]
-                if valid_end_words_in_state:
-                    # If there are valid end words in the current state, choose one of them
-                    last_word = np.random.choice(valid_end_words_in_state)
-                else:
-                    # If not, choose a new random state and pick a word from there
-                    while last_word is None or last_word in invalid_end_words:
+            print_line(f"Reason for stopping: {stop_reason}", 12)
+            if new_words:
+                # Start with your last chosen word
+                last_word = new_words[-1]
+                # As long as the last word is invalid, keep looping to find a valid one
+                while last_word in invalid_end_words:
+                    valid_end_words_in_state = []
+                    # Loop until we find a state that has valid end words in its transitions
+                    while not valid_end_words_in_state:
+                        # Randomly select a new current state
                         current_state = random.choice(list(self.transitions.keys()))
+                        # Derive the associated possible transitions for that state
                         possible_transitions = self.transitions[current_state]
-                        last_word = np.random.choice(list(possible_transitions.keys()),
-                                                     p=[freq / sum(possible_transitions.values()) for freq in
-                                                        possible_transitions.values()])
-
+                        # Check if there are any valid end words among possible transitions
+                        valid_end_words_in_state = [word for word in possible_transitions.keys() if
+                                                    word not in invalid_end_words]
+                    # Select a valid end word at random
+                    last_word = np.random.choice(valid_end_words_in_state)
+                # By the end of this loop, last_word should contain a valid end word
                 new_words[-1] = last_word
 
             generated_words = new_words
 
         generated_message = ''.join(generated_words).lstrip()
         print_line(f"Final message: '{generated_message}'", 11)
-        print_line(f"Reason for stopping: {stop_reason}", 12)
         return generated_message
 
 
@@ -240,8 +239,8 @@ class ChatBotHandler:
         # Initialize the message counter as empty dictionary
         self.message_counter: Dict[str, int] = {}
         # Initialize ignore_users list
-        self.ignore_users = ['streamelements', 'streamlabs', 'nightbot', 'soundalerts','buttsbot','sery_bot',
-                             'pokemoncommunitygame','elbierro']
+        self.ignore_users = ['streamelements', 'streamlabs', 'nightbot', 'soundalerts', 'buttsbot', 'sery_bot',
+                             'pokemoncommunitygame', 'elbierro', 'streamlootsbot', 'kofistreambot']
 
     @staticmethod
     async def handle_bot_startup(ready_event: EventData):
