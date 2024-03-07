@@ -3,8 +3,6 @@ import collections
 import configparser
 import math
 import numpy as np
-import os
-import pickle
 import random
 import re
 import spacy
@@ -20,7 +18,6 @@ from twitchAPI.twitch import Twitch
 from twitchAPI.type import AuthScope, ChatEvent
 
 import sqlite3
-from sqlite3 import Error
 
 # read config.ini file
 config_object = configparser.ConfigParser()
@@ -241,7 +238,9 @@ class MarkovChatbot:
                 space = "" if (next_word in eos_tokens or next_word.startswith("'") or next_word == ",") else " "
 
                 # Only add the next word if it is not an eos token or if min length has been reached
-                if not (next_word in eos_tokens and len(new_words) < min_length):
+                # And ensuring that the last word is not an invalid end word
+                if not (next_word in eos_tokens and (
+                        len(new_words) < min_length or new_words[-2] in invalid_end_words)):
                     new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
 
                 current_state = tuple((*current_state[1:], next_word))
