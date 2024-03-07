@@ -64,14 +64,24 @@ def custom_lemmatizer(nlp_doc):
 
 
 class MarkovChatbot:
+    db_connection = None
+    db_cursor = None
+
     def __init__(self, room_name, order=2):
         self.order = order
         self.transitions = collections.defaultdict(collections.Counter)
         self.room_name = room_name
-        self.connection = self.create_connection()
-        if self.connection is not None:
+        # If connection does not exist, create it.
+        if MarkovChatbot.db_connection is None or MarkovChatbot.db_cursor is None:
+            self.connection = self.create_connection()
             self.cursor = self.connection.cursor()
+            MarkovChatbot.db_connection = self.connection  # Set class level connection
+            MarkovChatbot.db_cursor = self.cursor  # Set class level cursor
             self.create_table()
+        else:
+            # If connection already exists, reuse it.
+            self.connection = MarkovChatbot.db_connection
+            self.cursor = MarkovChatbot.db_cursor
 
     def load_and_train(self):
         print_line("Loading and Training...", 5)
