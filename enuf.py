@@ -207,7 +207,10 @@ class MarkovChatbot:
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
         current_order = min(self.order, len(split_input_text))
-        current_state = tuple(split_input_text[-current_order:])
+        if len(split_input_text) < current_order:
+            current_state = ('',) * (current_order - len(split_input_text)) + tuple(split_input_text)
+        else:
+            current_state = tuple(split_input_text[-current_order:])
         generated_words = []
         eos_tokens = {'.', '!', '?'}
         stop_reason = ''
