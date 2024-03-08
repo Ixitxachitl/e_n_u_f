@@ -353,7 +353,7 @@ class ChatBotHandler:
         print_line(f'Bot is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=3):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         if msg.user.name in self.ignore_users:
             return
         print_line(f'In {msg.room.name}, {msg.user.name}: {msg.text}', 1)
