@@ -116,28 +116,14 @@ class MarkovChatbot:
         if rows:
             for row in rows:
                 self.train(row[0].strip())
-
-                # Get transitions from transitions_table for room
-                self.cursor.execute("""
-                                    SELECT current_state, next_word, count FROM transitions_table WHERE room_name = ?
-                                """, (self.room_name,))
-
-                transitions_rows = self.cursor.fetchall()
-
-                # Build transitions dictionary from result rows
-                for transition_row in transitions_rows:
-                    current_state = tuple(transition_row[0].split(','))
-                    next_word = transition_row[1]
-                    count = transition_row[2]
-                    self.transitions[current_state][next_word] += count
         else:
             print_line(f"No data found for room: {self.room_name}", 5)
 
     def train(self, text):
         print_line("Training...", 5)
-        words = custom_lemmatizer(nlp(text))  # Call to custom lemmatizer
+        words = custom_lemmatizer(nlp(text))
 
-        if len(words) == 1:  # Special case for single-word messages
+        if len(words) == 1:
             self.cursor.execute("""
                 SELECT count FROM transitions_table 
                 WHERE room_name = ? AND current_state = ? AND next_word = ?
@@ -149,13 +135,15 @@ class MarkovChatbot:
                     (room_name, current_state, next_word, count) 
                     VALUES (?, ?, ?, 1)
                 """, (self.room_name, '', words[0]))
+                self.transitions[('',)][words[0]] += 1
             else:
                 self.cursor.execute("""
                     UPDATE transitions_table 
                     SET count = count + 1
                     WHERE room_name = ? AND current_state = ? AND next_word = ?
                 """, (self.room_name, '', words[0]))
-        else:  # Existing code for messages with more than one word
+                self.transitions[('',)][words[0]] += 1
+        else:
             for i in range(len(words) - self.order):
                 current_state = tuple(words[i: i + self.order])
                 next_word = words[i + self.order]
@@ -166,19 +154,21 @@ class MarkovChatbot:
                 result = self.cursor.fetchone()
                 if result is None:
                     self.cursor.execute("""
-                        INSERT INTO transitions_table 
-                        (room_name, current_state, next_word, count) 
-                        VALUES (?, ?, ?, 1)
-                    """, (self.room_name, ','.join(current_state), next_word))
+                                    INSERT INTO transitions_table 
+                                    (room_name, current_state, next_word, count) 
+                                    VALUES (?, ?, ?, 1)
+                                """, (self.room_name, ','.join(current_state), next_word))
+                    self.transitions[current_state][next_word] += 1
                 else:
                     self.cursor.execute("""
-                        UPDATE transitions_table 
-                        SET count = count + 1
-                        WHERE room_name = ? AND current_state = ? AND next_word = ?
-                    """, (self.room_name, ','.join(current_state), next_word))
+                                    UPDATE transitions_table 
+                                    SET count = count + 1
+                                    WHERE room_name = ? AND current_state = ? AND next_word = ?
+                                """, (self.room_name, ','.join(current_state), next_word))
+                    self.transitions[current_state][next_word] += 1
 
-        self.connection.commit()
-        print_line("Training Completed!", 5)
+                self.connection.commit()
+                print_line("Training Completed!", 5)
 
     def append_data(self, text):
         print_line("Appending data...", 5)
