@@ -37,7 +37,7 @@ nlp_dict = set(w.lower_ for w in nlp.vocab)
 
 
 def print_line(text, line_num):
-    print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
+    # print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
     print('\033[{};0H'.format(line_num) + text)  # write your text at the start of the cleared line
 
 
@@ -82,8 +82,6 @@ class MarkovChatbot:
             # If connection already exists, reuse it.
             self.connection = MarkovChatbot.db_connection
             self.cursor = MarkovChatbot.db_cursor
-
-    def initial_load_and_train(self):
         self.load_and_train()
 
     def load_and_train(self):
@@ -118,6 +116,20 @@ class MarkovChatbot:
         if rows:
             for row in rows:
                 self.train(row[0].strip())
+
+                # Get transitions from transitions_table for room
+                self.cursor.execute("""
+                                    SELECT current_state, next_word, count FROM transitions_table WHERE room_name = ?
+                                """, (self.room_name,))
+
+                transitions_rows = self.cursor.fetchall()
+
+                # Build transitions dictionary from result rows
+                for transition_row in transitions_rows:
+                    current_state = tuple(transition_row[0].split(','))
+                    next_word = transition_row[1]
+                    count = transition_row[2]
+                    self.transitions[current_state][next_word] += count
         else:
             print_line(f"No data found for room: {self.room_name}", 5)
 
@@ -341,14 +353,13 @@ class ChatBotHandler:
         print_line(f'Bot is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
         await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=3):
         if msg.user.name in self.ignore_users:
             return
         print_line(f'In {msg.room.name}, {msg.user.name}: {msg.text}', 1)
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
-            self.chatbots[msg.room.name].initial_load_and_train()
         self.chatbots[msg.room.name].append_data(msg.text)
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
