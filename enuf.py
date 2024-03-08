@@ -83,6 +83,9 @@ class MarkovChatbot:
             self.connection = MarkovChatbot.db_connection
             self.cursor = MarkovChatbot.db_cursor
 
+    def initial_load_and_train(self):
+        self.load_and_train()
+
     def load_and_train(self):
         print_line("Loading and Training...", 5)
 
@@ -93,7 +96,6 @@ class MarkovChatbot:
         rows = self.cursor.fetchall()
 
         # Build transitions dictionary from result rows
-        self.transitions = collections.defaultdict(collections.Counter)
         for row in rows:
             current_state = tuple(row[0].split(','))
             next_word = row[1]
@@ -121,44 +123,58 @@ class MarkovChatbot:
 
     def train(self, text):
         print_line("Training...", 5)
-
         words = custom_lemmatizer(nlp(text))  # Call to custom lemmatizer
 
-        for i in range(len(words) - self.order):
-            current_state = tuple(words[i: i + self.order])
-            next_word = words[i + self.order]
-            self.transitions[current_state][next_word] = self.transitions[current_state].get(next_word, 0) + 1
-
-            # Insert or update transition into transitions_table in database
+        if len(words) == 1:  # Special case for single-word messages
             self.cursor.execute("""
-                INSERT OR REPLACE INTO transitions_table 
-                (room_name, current_state, next_word, count) 
-                VALUES (?, ?, ?, ?)
-            """, (self.room_name, ','.join(current_state), next_word, self.transitions[current_state][next_word]))
+                SELECT count FROM transitions_table 
+                WHERE room_name = ? AND current_state = ? AND next_word = ?
+            """, (self.room_name, '', words[0]))
+            result = self.cursor.fetchone()
+            if result is None:
+                self.cursor.execute("""
+                    INSERT INTO transitions_table 
+                    (room_name, current_state, next_word, count) 
+                    VALUES (?, ?, ?, 1)
+                """, (self.room_name, '', words[0]))
+            else:
+                self.cursor.execute("""
+                    UPDATE transitions_table 
+                    SET count = count + 1
+                    WHERE room_name = ? AND current_state = ? AND next_word = ?
+                """, (self.room_name, '', words[0]))
+        else:  # Existing code for messages with more than one word
+            for i in range(len(words) - self.order):
+                current_state = tuple(words[i: i + self.order])
+                next_word = words[i + self.order]
+                self.cursor.execute("""
+                    SELECT count FROM transitions_table 
+                    WHERE room_name = ? AND current_state = ? AND next_word = ?
+                """, (self.room_name, ','.join(current_state), next_word))
+                result = self.cursor.fetchone()
+                if result is None:
+                    self.cursor.execute("""
+                        INSERT INTO transitions_table 
+                        (room_name, current_state, next_word, count) 
+                        VALUES (?, ?, ?, 1)
+                    """, (self.room_name, ','.join(current_state), next_word))
+                else:
+                    self.cursor.execute("""
+                        UPDATE transitions_table 
+                        SET count = count + 1
+                        WHERE room_name = ? AND current_state = ? AND next_word = ?
+                    """, (self.room_name, ','.join(current_state), next_word))
 
         self.connection.commit()
         print_line("Training Completed!", 5)
 
     def append_data(self, text):
         print_line("Appending data...", 5)
-
         # Insert text into data_file_table
         self.cursor.execute("""
             INSERT INTO data_file_table (room_name, data) VALUES (?, ?)
         """, (self.room_name, text))
-
         self.train(text)
-
-        # Insert transitions into transitions_table
-        for current_state, next_words in self.transitions.items():
-            for next_word, count in next_words.items():
-                self.cursor.execute("""
-                    REPLACE INTO transitions_table (room_name, current_state, next_word, count) VALUES (?, ?, ?, ?)
-                """, (self.room_name, ','.join(current_state), next_word, count))
-
-        # Committing transactions and closing the connection
-        self.connection.commit()
-
         print_line("Appended data and updated transitions!", 5)
 
     def generate(self, input_text, min_length=5, max_length=20):
@@ -188,7 +204,7 @@ class MarkovChatbot:
                         'before', 'after', 'between', 'into', 'through', 'during',
                         'without', 'about', 'against', 'among', 'around', 'above',
                         'below', 'along', 'since', 'toward', 'upon'}
-        invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'and', 'or', 'because'}
+        invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'because', ','}
 
         number_words = set(map(str, range(10)))
         invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union({','})
@@ -234,10 +250,14 @@ class MarkovChatbot:
 
                 # Check if next word is potentially the last, and if it's invalid pick another word
                 while (len(new_words) == max_length - 1 and next_word in invalid_end_words) or (
-                        continue_generation is False and next_word in invalid_end_words):
+                        continue_generation is False):
                     next_word = np.random.choice(list(possible_transitions.keys()),
                                                  p=[freq / sum(possible_transitions.values()) for freq in
                                                     possible_transitions.values()])
+                    while next_word in invalid_end_words:
+                        next_word = np.random.choice(list(possible_transitions.keys()),
+                                                     p=[freq / sum(possible_transitions.values()) for freq in
+                                                        possible_transitions.values()])
 
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
@@ -328,6 +348,7 @@ class ChatBotHandler:
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
             self.chatbots[msg.room.name] = MarkovChatbot(msg.room.name)
+            self.chatbots[msg.room.name].initial_load_and_train()
         self.chatbots[msg.room.name].append_data(msg.text)
         # Increment message counter for the specific room
         self.message_counter[msg.room.name] = self.message_counter.get(msg.room.name, 0) + 1
