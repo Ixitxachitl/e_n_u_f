@@ -275,6 +275,8 @@ class MarkovChatbot:
 
                 if len(new_words) == 0 and (next_word in invalid_start_words or next_word.startswith("'")):
                     print_line(f"The chosen word '{next_word}' is an invalid start word, restarting selection.", 10)
+                    current_state = random.choice(list(self.transitions.keys()))
+                    print_line(f"Chose a new current state: {current_state}", 7)
                     continue
 
                 space = "" if (next_word in eos_tokens or next_word.startswith("'") or next_word == ",") else " "
