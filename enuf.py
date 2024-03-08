@@ -119,56 +119,49 @@ class MarkovChatbot:
         else:
             print_line(f"No data found for room: {self.room_name}", 5)
 
+    def update_transition_counts(self, current_state, next_word):
+        self.cursor.execute("""
+            SELECT count FROM transitions_table 
+            WHERE room_name = ? AND current_state = ? AND next_word = ?
+        """, (self.room_name, ','.join(current_state), next_word))
+        result = self.cursor.fetchone()
+        if result is None:
+            self.cursor.execute("""
+                INSERT INTO transitions_table 
+                (room_name, current_state, next_word, count) 
+                VALUES (?, ?, ?, 1)
+            """, (self.room_name, ','.join(current_state), next_word))
+            self.transitions[current_state][next_word] += 1
+        else:
+            self.cursor.execute("""
+                UPDATE transitions_table 
+                SET count = count + 1
+                WHERE room_name = ? AND current_state = ? AND next_word = ?
+            """, (self.room_name, ','.join(current_state), next_word))
+            self.transitions[current_state][next_word] += 1
+
     def train(self, text):
         print_line("Training...", 5)
         words = custom_lemmatizer(nlp(text))
 
         if len(words) == 1:
-            self.cursor.execute("""
-                SELECT count FROM transitions_table 
-                WHERE room_name = ? AND current_state = ? AND next_word = ?
-            """, (self.room_name, '', words[0]))
-            result = self.cursor.fetchone()
-            if result is None:
-                self.cursor.execute("""
-                    INSERT INTO transitions_table 
-                    (room_name, current_state, next_word, count) 
-                    VALUES (?, ?, ?, 1)
-                """, (self.room_name, '', words[0]))
-                self.transitions[('',)][words[0]] += 1
-            else:
-                self.cursor.execute("""
-                    UPDATE transitions_table 
-                    SET count = count + 1
-                    WHERE room_name = ? AND current_state = ? AND next_word = ?
-                """, (self.room_name, '', words[0]))
-                self.transitions[('',)][words[0]] += 1
+            current_state = ('', '')
+            next_word = words[0]
+            self.update_transition_counts(current_state, next_word)
+
+        elif len(words) == 2:
+            current_state = ('', words[0])
+            next_word = words[1]
+            self.update_transition_counts(current_state, next_word)
+
         else:
             for i in range(len(words) - self.order):
                 current_state = tuple(words[i: i + self.order])
                 next_word = words[i + self.order]
-                self.cursor.execute("""
-                    SELECT count FROM transitions_table 
-                    WHERE room_name = ? AND current_state = ? AND next_word = ?
-                """, (self.room_name, ','.join(current_state), next_word))
-                result = self.cursor.fetchone()
-                if result is None:
-                    self.cursor.execute("""
-                                    INSERT INTO transitions_table 
-                                    (room_name, current_state, next_word, count) 
-                                    VALUES (?, ?, ?, 1)
-                                """, (self.room_name, ','.join(current_state), next_word))
-                    self.transitions[current_state][next_word] += 1
-                else:
-                    self.cursor.execute("""
-                                    UPDATE transitions_table 
-                                    SET count = count + 1
-                                    WHERE room_name = ? AND current_state = ? AND next_word = ?
-                                """, (self.room_name, ','.join(current_state), next_word))
-                    self.transitions[current_state][next_word] += 1
+                self.update_transition_counts(current_state, next_word)
 
-                self.connection.commit()
-                print_line("Training Completed!", 5)
+        self.connection.commit()
+        print_line("Training Completed!", 5)
 
     def append_data(self, text):
         print_line("Appending data...", 5)
