@@ -209,7 +209,7 @@ class MarkovChatbot:
         invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'because', ','}
 
         number_words = set(map(str, range(10)))
-        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union({','})
+        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union({',', '/'})
         invalid_end_words = coord_conjunctions.union(invalid_end_words)
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
@@ -251,15 +251,11 @@ class MarkovChatbot:
                                                 possible_transitions.values()])
 
                 # Check if next word is potentially the last, and if it's invalid pick another word
-                while (len(new_words) == max_length - 1 and next_word in invalid_end_words) or (
-                        continue_generation is False):
+                is_last_word = len(new_words) == max_length - 1 or not continue_generation
+                while is_last_word and next_word in invalid_end_words:
                     next_word = np.random.choice(list(possible_transitions.keys()),
                                                  p=[freq / sum(possible_transitions.values()) for freq in
                                                     possible_transitions.values()])
-                    while next_word in invalid_end_words:
-                        next_word = np.random.choice(list(possible_transitions.keys()),
-                                                     p=[freq / sum(possible_transitions.values()) for freq in
-                                                        possible_transitions.values()])
 
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
