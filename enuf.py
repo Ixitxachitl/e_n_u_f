@@ -31,7 +31,7 @@ APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['']
+TARGET_CHANNEL = ['thejameskz']
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
 nlp_dict = set(w.lower_ for w in nlp.vocab)
@@ -257,7 +257,7 @@ class MarkovChatbot:
 
                 # Check if next word is potentially the last, and if it's invalid pick another word
                 is_last_word = len(new_words) == max_length - 1 or not continue_generation
-                while is_last_word and next_word in invalid_end_words:
+                while is_last_word and (next_word in invalid_end_words or len(new_words) == 0):
                     while all(word in invalid_end_words for word in possible_transitions.keys()):
                         print_line(f"All possible transitions were invalid, chose a new current state: {current_state}",
                                    10)
@@ -268,6 +268,9 @@ class MarkovChatbot:
                                                     possible_transitions.values()])
 
                 if not continue_generation:
+                    if len(new_words) == 0 or new_words[-1] in invalid_end_words:
+                        stop_reason = "The chosen end word is invalid, re-choosing."
+                        continue
                     stop_reason = "Decided not to continue generation"
                     break
 
