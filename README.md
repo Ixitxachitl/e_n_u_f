@@ -48,14 +48,12 @@ python enuf.py
 If no OAuth token and refresh token are found within the config file, the program will initiate the Twitch OAuth 2.0 authentication process which prompts you to log in through your default web browser. Once logged in correctly, the OAuth token and refresh token are stored within the config file.
 
 ### 4. Using the chatbot:
+After running the file, the program will first connect to the Twitch IRC server before joining the chat rooms. The chat rooms are specified in `config.ini` as a comma separated list under `target_channels`. 
 
-By running the file, the program will first connect to the Twitch IRC server before joining the chat rooms which are specified in the `TARGET_CHANNEL` array.
+If a user joins the channel owned by the bot, the user can type `!join` to have the bot join the user's channel and `!leave` if the user wants it to leave. 
 
-Once a message is sent within a chat room, an instance of the Markov Chatbot class is created for each room in the array. The message text content is then added to the end of the training data which is handled by the bot.
+Whenever a message is sent within a chat room, an instance of the Markov Chatbot class is created. The message text content is then added to the end of the training data handled by the bot. 
+The bot generates chat messages at random.
 
-The bot will generate chat messages at random.
-
-To stop the bot from sending messages, simply press ENTER.
-
-Enjoy your newly created Twitch chatbot!
+To stop the bot, simply press ENTER.
 
