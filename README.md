@@ -33,6 +33,9 @@ APP_ID = your_twitch_client_id
 APP_SECRET = your_twitch_client_secret
 OAUTH_TOKEN = 
 REFRESH_TOKEN =
+
+[CHANNELS]
+target_channels = 
 ```
 
 ### 3. Run the `enuf.py`:
