@@ -10,6 +10,7 @@ import spacy
 from typing import Dict
 
 import nltk
+import twitchAPI.oauth
 from nltk.corpus import wordnet
 # python -m nltk.downloader averaged_perceptron_tagger wordnet
 from twitchAPI.chat import Chat, EventData, ChatMessage
@@ -37,7 +38,7 @@ nlp_dict = set(w.lower_ for w in nlp.vocab)
 
 
 def print_line(text, line_num):
-    print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
+    # print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
     print('\033[{};0H'.format(line_num) + text)  # write your text at the start of the cleared line
 
 
@@ -194,16 +195,32 @@ class MarkovChatbot:
         6. Return the generated message.
         """
 
+        # Coordinating conjunctions, cannot start or end a sentence.
         coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
+
+        # Prepositions, cannot start a sentence.
         prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
                         'before', 'after', 'between', 'into', 'through', 'during',
                         'without', 'about', 'against', 'among', 'around', 'above',
                         'below', 'along', 'since', 'toward', 'upon'}
-        invalid_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'because', ','}
 
+        # Other words that are not suitable to end a sentence.
+        additional_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'because'}
+
+        # Words that represent numbers, not suitable to start a sentence.
         number_words = set(map(str, range(10)))
-        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union({',', '/'})
-        invalid_end_words = coord_conjunctions.union(invalid_end_words)
+
+        # Symbols that are invalid as start words.
+        invalid_start_symbols = {'/', '\\', '|', '?', '&', '%', '#', '-', '+', '^', '.', ','}
+
+        # Symbols that are invalid as end words.
+        invalid_end_symbols = {'/', '\\', '|', '&', '%', '#', '@', '-', '+', '^', ','}
+
+        # Gather all invalid start words.
+        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union(invalid_start_symbols)
+
+        # Gather all invalid end words.
+        invalid_end_words = coord_conjunctions.union(additional_end_words).union(invalid_end_symbols).union(number_words)
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
         current_order = min(self.order, len(split_input_text))
@@ -326,6 +343,7 @@ class MarkovChatbot:
 
 class ChatBotHandler:
     def __init__(self):
+        self.name = ''
         self.chatbots = {}
         # Initialize the message counter as empty dictionary
         self.message_counter: Dict[str, int] = {}
@@ -333,10 +351,16 @@ class ChatBotHandler:
         self.ignore_users = ['streamelements', 'streamlabs', 'nightbot', 'soundalerts', 'buttsbot', 'sery_bot',
                              'pokemoncommunitygame', 'elbierro', 'streamlootsbot', 'kofistreambot']
 
-    @staticmethod
-    async def handle_bot_startup(ready_event: EventData):
-        print_line(f'Bot is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
+    async def handle_bot_startup(self, ready_event: EventData):
+        self.name = ready_event.chat.username
+        print_line(f'{self.name} is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
         await ready_event.chat.join_room(TARGET_CHANNEL)
+        users = []
+        async for user in ready_event.chat.twitch.get_users(logins=TARGET_CHANNEL):
+            users.append(user)
+        for user in users:
+            info = await ready_event.chat.twitch.get_channel_information(user.id)
+            print(info[0].__dict__)
 
     async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         if msg.user.name in self.ignore_users:
