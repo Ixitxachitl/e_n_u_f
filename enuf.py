@@ -362,7 +362,8 @@ class ChatBotHandler:
                              'pokemoncommunitygame', 'elbierro', 'streamlootsbot', 'kofistreambot']
 
     async def join_room(self, cmd: ChatCommand):
-        if cmd.room.name == cmd.chat.username and cmd.user.name not in target_channels:
+        if (cmd.room.name == cmd.chat.username and cmd.user.name not in target_channels
+                and cmd.user.name != cmd.room.name):
             await cmd.chat.join_room(cmd.user.name)
             print_line(f'{self.name} joined {cmd.user.name}', 0)
             await cmd.reply(f'Joined {cmd.user.name}')
@@ -378,7 +379,7 @@ class ChatBotHandler:
                 config_object.write(f)
 
     async def leave_room(self, cmd: ChatCommand):
-        if cmd.room.name == cmd.chat.username and cmd.user.name in target_channels:
+        if cmd.room.name == cmd.chat.username and cmd.user.name in target_channels and cmd.user.name != cmd.room.name:
             await cmd.chat.leave_room(cmd.user.name)
             print_line(f'{self.name} left {cmd.user.name}', 0)
             await cmd.reply(f'Left {cmd.user.name}')
