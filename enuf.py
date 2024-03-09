@@ -230,11 +230,14 @@ class MarkovChatbot:
         invalid_end_words = coord_conjunctions.union(additional_end_words).union(invalid_end_symbols).union(number_words)
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
-        current_order = min(self.order, len(split_input_text))
-        if len(split_input_text) < current_order:
-            current_state = ('',) * (current_order - len(split_input_text)) + tuple(split_input_text)
+
+        # For inputs with less than 'self.order' words, we append empty strings
+        # to the start of the current_state tuple.
+        if len(split_input_text) < self.order:
+            current_state = ("",) * (self.order - len(split_input_text)) + tuple(split_input_text)
         else:
-            current_state = tuple(split_input_text[-current_order:])
+            current_state = tuple(split_input_text[-self.order:])
+
         generated_words = []
         eos_tokens = {'.', '!', '?'}
         stop_reason = ''
@@ -298,7 +301,12 @@ class MarkovChatbot:
                         and next_word not in invalid_end_words):
                     new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
 
-                current_state = tuple((*current_state[1:], next_word))
+                if len(current_state) > 2:
+                    # We use only last two words and next_word to update the current_state
+                    current_state = tuple((*current_state[-2:], next_word))
+                else:
+                    # Below is the old behavior
+                    current_state = tuple((*current_state[1:], next_word))
 
                 if next_word in eos_tokens:
                     stop_reason = "Hit end-of-sentence token"
