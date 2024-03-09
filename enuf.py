@@ -10,10 +10,9 @@ import spacy
 from typing import Dict
 
 import nltk
-import twitchAPI.oauth
 from nltk.corpus import wordnet
 # python -m nltk.downloader averaged_perceptron_tagger wordnet
-from twitchAPI.chat import Chat, EventData, ChatMessage
+from twitchAPI.chat import Chat, EventData, ChatMessage, ChatCommand
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.twitch import Twitch
 from twitchAPI.type import AuthScope, ChatEvent
@@ -25,13 +24,15 @@ config_object = configparser.ConfigParser()
 config_object.read("config.ini")
 
 credentials = config_object["TWITCH_CREDENTIALS"]
+channels_str = config_object.get('CHANNELS', 'target_channels')
+target_channels = [channel.strip() for channel in channels_str.split(',') if channel.strip()]
 
 APP_ID = credentials['APP_ID']
 APP_SECRET = credentials['APP_SECRET']
 OAUTH_TOKEN = credentials['OAUTH_TOKEN']
 REFRESH_TOKEN = credentials['REFRESH_TOKEN']
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT]
-TARGET_CHANNEL = ['']
+TARGET_CHANNEL = target_channels
 
 nlp = spacy.load('en_core_web_sm')  # spacy's English model
 nlp_dict = set(w.lower_ for w in nlp.vocab)
@@ -217,10 +218,10 @@ class MarkovChatbot:
         number_words = set(map(str, range(10)))
 
         # Symbols that are invalid as start words.
-        invalid_start_symbols = {'/', '\\', '|', '?', '&', '%', '#', '-', '+', '^', '.', ','}
+        invalid_start_symbols = {'/', '\\', '|', '?', '&', '%', '#', '-', '+', '^', '.', ',', ')'}
 
         # Symbols that are invalid as end words.
-        invalid_end_symbols = {'/', '\\', '|', '&', '%', '#', '@', '-', '+', '^', ','}
+        invalid_end_symbols = {'/', '\\', '|', '&', '%', '#', '@', '-', '+', '^', ',', '('}
 
         # Gather all invalid start words.
         invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union(invalid_start_symbols)
@@ -360,18 +361,49 @@ class ChatBotHandler:
         self.ignore_users = ['streamelements', 'streamlabs', 'nightbot', 'soundalerts', 'buttsbot', 'sery_bot',
                              'pokemoncommunitygame', 'elbierro', 'streamlootsbot', 'kofistreambot']
 
+    async def join_room(self, cmd: ChatCommand):
+        if cmd.room.name == cmd.chat.username and cmd.user.name not in target_channels:
+            await cmd.chat.join_room(cmd.user.name)
+            print_line(f'{self.name} joined {cmd.user.name}', 0)
+            await cmd.reply(f'Joined {cmd.user.name}')
+
+            # add the new channel to the target_channels list
+            target_channels.append(cmd.user.name)
+
+            # update it in the config_object
+            config_object.set('CHANNELS', 'target_channels', ', '.join(target_channels))
+
+            # write the changes back to the config file
+            with open('config.ini', 'w') as f:
+                config_object.write(f)
+
+    async def leave_room(self, cmd: ChatCommand):
+        if cmd.room.name == cmd.chat.username and cmd.user.name in target_channels:
+            await cmd.chat.leave_room(cmd.user.name)
+            print_line(f'{self.name} left {cmd.user.name}', 0)
+            await cmd.reply(f'Left {cmd.user.name}')
+
+            # remove the channel from the target_channels list
+            target_channels.remove(cmd.user.name)
+
+            # update it in the config_object
+            config_object.set('CHANNELS', 'target_channels', ', '.join(target_channels))
+
+            # write the changes back to the config file
+            with open('config.ini', 'w') as f:
+                config_object.write(f)
+
     async def handle_bot_startup(self, ready_event: EventData):
         self.name = ready_event.chat.username
-        print_line(f'{self.name} is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
-        await ready_event.chat.join_room(TARGET_CHANNEL)
-        users = []
-        async for user in ready_event.chat.twitch.get_users(logins=TARGET_CHANNEL):
-            users.append(user)
-        for user in users:
-            info = await ready_event.chat.twitch.get_channel_information(user.id)
-            print(info[0].__dict__)
+        await ready_event.chat.join_room(self.name)
+        print_line(f'{self.name} joined it\'s own channel', 0)
+        if TARGET_CHANNEL:
+            print_line(f'{self.name} is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
+            await ready_event.chat.join_room(TARGET_CHANNEL)
 
     async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
+        if msg.room.name == msg.chat.username:
+            return
         if msg.user.name in self.ignore_users:
             return
         print_line(f'In {msg.room.name}, {msg.user.name}: {msg.text}', 1)
@@ -423,6 +455,8 @@ async def run(oauth_token='', refresh_token=''):
     chat = await Chat(twitch)
     chat.register_event(ChatEvent.READY, handler.handle_bot_startup)
     chat.register_event(ChatEvent.MESSAGE, handler.handle_incoming_message)
+    chat.register_command('join', handler.join_room)
+    chat.register_command('leave', handler.leave_room)
 
     chat.start()
 
