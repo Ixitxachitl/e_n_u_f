@@ -245,16 +245,11 @@ class MarkovChatbot:
 
                 x = len(new_words)
                 continuation_probability = 1 - math.exp((x - max_length) / 5)
-                print_line(f"Continuation Probability: {round(continuation_probability*100)}%", 9)
+                print_line(f"Continuation Probability: {round(continuation_probability * 100)}%", 9)
 
                 continue_generation = random.choices(
                     [True, False], weights=[continuation_probability, 1 - continuation_probability]
                 )[0]
-
-                if all(word in invalid_start_words or word in eos_tokens for word in possible_transitions.keys()):
-                    current_state = random.choice(list(self.transitions.keys()))
-                    print_line(f"All possible transitions were invalid, chose a new current state: {current_state}", 10)
-                    continue
 
                 next_word = np.random.choice(list(possible_transitions.keys()),
                                              p=[freq / sum(possible_transitions.values()) for freq in
@@ -263,6 +258,11 @@ class MarkovChatbot:
                 # Check if next word is potentially the last, and if it's invalid pick another word
                 is_last_word = len(new_words) == max_length - 1 or not continue_generation
                 while is_last_word and next_word in invalid_end_words:
+                    while all(word in invalid_end_words for word in possible_transitions.keys()):
+                        print_line(f"All possible transitions were invalid, chose a new current state: {current_state}",
+                                   10)
+                        current_state = random.choice(list(self.transitions.keys()))
+                        possible_transitions = self.transitions[current_state]
                     next_word = np.random.choice(list(possible_transitions.keys()),
                                                  p=[freq / sum(possible_transitions.values()) for freq in
                                                     possible_transitions.values()])
