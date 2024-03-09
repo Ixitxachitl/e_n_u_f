@@ -175,19 +175,25 @@ class MarkovChatbot:
 
     def generate(self, input_text, min_length=5, max_length=20):
         """
-        This function generates a message based on the Markov model.
+        This function generates a message based on a higher order Markov model, where the order can dynamically change based
+        on the length of the input text.
+
+        Inputs should be tokenized and lemmatized and the output is a sentence generated with such a treatment in mind.
 
         Steps:
         1. Define invalid start and end words for a sentence.
-        2. Lemmatize the input text and set the initial state of the Markov model.
+        2. Tokenize and lemmatize the input text and set the initial state of the Markov model.
+            'current_order' is used here, which can accommodate input texts shorter than the maximum order of the model.
         3. Initialize an empty list to hold the generated words.
         4. Loop through:
-            - If the current state has no transitions in the model, select a new current state randomly.
+            - If the current state (consisting of 'current_order' recent words) has no transitions in the model, select
+              a new current state randomly from available states.
             - Determine whether to continue generating words based on the length of the generated sentence and a
               probabilistic condition.
             - Choose the next word based on transition probabilities. If the next word could potentially be the last,
               and it is an invalid end word, continue choosing a new next word until a valid end word is chosen.
-            - Update the current state, adding the chosen word and discarding the oldest word from it.
+            - Update the current state, adding the chosen word and discarding the oldest word from it. The length of
+              'current_state' always equals to 'current_order'.
             - Break the loop either when an end-of-sentence token is reached, the maximum sentence length is reached, or
               the probabilistic condition to stop generating words is met.
         5. Concatenate the generated words to create the output message, ensuring that the last word is not an invalid
