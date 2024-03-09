@@ -229,13 +229,10 @@ class MarkovChatbot:
                 x = len(new_words)
                 continuation_probability = 1 - math.exp((x - max_length) / 5)
                 print_line(f"Continuation Probability: {round(continuation_probability*100)}%", 9)
+
                 continue_generation = random.choices(
                     [True, False], weights=[continuation_probability, 1 - continuation_probability]
                 )[0]
-
-                if not continue_generation:
-                    stop_reason = "Decided not to continue generation"
-                    break
 
                 if all(word in invalid_start_words or word in eos_tokens for word in possible_transitions.keys()):
                     current_state = random.choice(list(self.transitions.keys()))
@@ -252,6 +249,10 @@ class MarkovChatbot:
                     next_word = np.random.choice(list(possible_transitions.keys()),
                                                  p=[freq / sum(possible_transitions.values()) for freq in
                                                     possible_transitions.values()])
+
+                if not continue_generation:
+                    stop_reason = "Decided not to continue generation"
+                    break
 
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
