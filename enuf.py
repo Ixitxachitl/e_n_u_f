@@ -293,8 +293,9 @@ class MarkovChatbot:
 
                 # Only add the next word if it is not an eos token or if min length has been reached
                 # And ensuring that the last word is not an invalid end word
-                if not (next_word in eos_tokens and (
-                        len(new_words) < min_length or new_words[-2] in invalid_end_words)):
+                if (not (next_word in eos_tokens and (
+                        len(new_words) < min_length or (len(new_words) > 1 and new_words[-2] in invalid_end_words)))
+                        and next_word not in invalid_end_words):
                     new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
 
                 current_state = tuple((*current_state[1:], next_word))
