@@ -40,7 +40,7 @@ nlp_dict = set(w.lower_ for w in nlp.vocab)
 
 
 def print_line(text, line_num):
-    print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
+    # print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
     print('\033[{};0H'.format(line_num) + text)  # write your text at the start of the cleared line
 
 
@@ -123,26 +123,40 @@ class MarkovChatbot:
             print_line(f"No data found for room: {self.room_name}", 5)
 
     def update_transition_counts(self, current_state, next_word):
-        current_state_as_json = json.dumps(current_state)
-        self.cursor.execute("""
-            SELECT count FROM transitions_table 
+        # Prepare values including current_state
+        values = (self.room_name, json.dumps(current_state), next_word)
+        # Check if record with given state and next word exists
+        self.cursor.execute(
+            """
+            SELECT count, current_state FROM transitions_table 
             WHERE room_name = ? AND current_state = ? AND next_word = ?
-        """, (self.room_name, ','.join(current_state), next_word))
+            """,
+            values
+        )
         result = self.cursor.fetchone()
         if result is None:
-            self.cursor.execute("""
+            self.cursor.execute(
+                """
                 INSERT INTO transitions_table 
                    (room_name, current_state, next_word, count) 
                 VALUES (?, ?, ?, 1)
-                """, (self.room_name, current_state_as_json, next_word))
+                """,
+                (self.room_name, json.dumps(current_state), next_word)
+            )
             self.transitions[current_state][next_word] += 1
         else:
-            self.cursor.execute("""
-            UPDATE transitions_table 
-            SET count = count + 1
-            WHERE room_name = ? AND current_state = ? AND next_word = ?
-            """, (self.room_name, current_state_as_json, next_word))
-            self.transitions[current_state][next_word] += 1
+            db_current_state = tuple(json.loads(result[1]))
+
+            if db_current_state == current_state:
+                self.cursor.execute(
+                    """
+                    UPDATE transitions_table 
+                    SET count = count + 1
+                    WHERE room_name = ? AND current_state = ? AND next_word = ?
+                    """,
+                    values
+                )
+                self.transitions[current_state][next_word] += 1
 
     def train(self, text):
         print_line("Training...", 5)
@@ -239,8 +253,6 @@ class MarkovChatbot:
                     current_state = random.choice(list(self.transitions.keys()))
                     print_line(f"Chose a new current state: {current_state}", 7)
 
-                possible_transitions = self.transitions[current_state]
-
                 x = len(new_words)
                 continuation_probability = 1 - math.exp((x - max_length) / 5)
                 print_line(f"Continuation Probability: {round(continuation_probability * 100)}%", 9)
@@ -249,9 +261,19 @@ class MarkovChatbot:
                     [True, False], weights=[continuation_probability, 1 - continuation_probability]
                 )[0]
 
-                next_word = np.random.choice(list(possible_transitions.keys()),
-                                             p=[freq / sum(possible_transitions.values()) for freq in
-                                                possible_transitions.values()])
+                possible_transitions = self.transitions[current_state]
+                # Get the keys (transitions) and their corresponding counts
+                transitions = list(possible_transitions.keys())
+                counts = list(possible_transitions.values())
+
+                # Compute the total count
+                total_count = sum(counts)
+
+                # The probabilities are computed as the count of each transition divided by the total count
+                probabilities = [count / total_count for count in counts]
+
+                # Choose the next_word based on the computed probabilities
+                next_word = np.random.choice(transitions, p=probabilities)
 
                 # Check if next word is potentially the last, and if it's invalid pick another word
                 is_last_word = len(new_words) == max_length - 1 or not continue_generation
@@ -283,8 +305,10 @@ class MarkovChatbot:
                 # Default behavior is to add a space
                 space = " "
 
-                next_word_is_punctuation = eos_tokens or next_word in {",", ".", ":", ";", "(", "[", "\"", "{", "'", "_"
-                                                                       , ")", "]", "}", "\""}
+                next_word_is_punctuation = next_word in eos_tokens or next_word in {",", ".", ":", ";", "(", "[", "\"",
+                                                                                    "{", "'", "_",
+                                                                                    ")", "]", "}", "\""}
+
                 previous_word_is_opening_punctuation = new_words and new_words[-1] in {"(", "[", "\"", "{", "'", "_"}
 
                 # Don't add a space if next word is punctuation
