@@ -283,9 +283,17 @@ class MarkovChatbot:
                                    10)
                         current_state = random.choice(list(self.transitions.keys()))
                         possible_transitions = self.transitions[current_state]
-                    next_word = np.random.choice(list(possible_transitions.keys()),
-                                                 p=[freq / sum(possible_transitions.values()) for freq in
-                                                    possible_transitions.values()])
+                    transitions = list(possible_transitions.keys())
+                    counts = list(possible_transitions.values())
+
+                    # Compute the total count
+                    total_count = sum(counts)
+
+                    # The probabilities are computed as the count of each transition divided by the total count
+                    probabilities = [count / total_count for count in counts]
+
+                    # Choose the next_word based on the computed probabilities
+                    next_word = np.random.choice(transitions, p=probabilities)
 
                 if not continue_generation:
                     if len(new_words) == 0 or new_words[-1] in invalid_end_words:
