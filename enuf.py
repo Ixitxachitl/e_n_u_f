@@ -1,6 +1,7 @@
 import asyncio
 import collections
 import configparser
+import json
 import math
 import numpy as np
 import random
@@ -97,7 +98,7 @@ class MarkovChatbot:
 
         # Build transitions dictionary from result rows
         for row in rows:
-            current_state = tuple(row[0].split(','))
+            current_state = tuple(json.loads(row[0]))
             next_word = row[1]
             count = row[2]
             self.transitions[current_state][next_word] += count
@@ -122,6 +123,7 @@ class MarkovChatbot:
             print_line(f"No data found for room: {self.room_name}", 5)
 
     def update_transition_counts(self, current_state, next_word):
+        current_state_as_json = json.dumps(current_state)
         self.cursor.execute("""
             SELECT count FROM transitions_table 
             WHERE room_name = ? AND current_state = ? AND next_word = ?
@@ -130,16 +132,16 @@ class MarkovChatbot:
         if result is None:
             self.cursor.execute("""
                 INSERT INTO transitions_table 
-                (room_name, current_state, next_word, count) 
+                   (room_name, current_state, next_word, count) 
                 VALUES (?, ?, ?, 1)
-            """, (self.room_name, ','.join(current_state), next_word))
+                """, (self.room_name, current_state_as_json, next_word))
             self.transitions[current_state][next_word] += 1
         else:
             self.cursor.execute("""
-                UPDATE transitions_table 
-                SET count = count + 1
-                WHERE room_name = ? AND current_state = ? AND next_word = ?
-            """, (self.room_name, ','.join(current_state), next_word))
+            UPDATE transitions_table 
+            SET count = count + 1
+            WHERE room_name = ? AND current_state = ? AND next_word = ?
+            """, (self.room_name, current_state_as_json, next_word))
             self.transitions[current_state][next_word] += 1
 
     def train(self, text):
