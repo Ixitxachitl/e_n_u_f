@@ -146,6 +146,7 @@ class MarkovChatbot:
 
     def train(self, text):
         print_line("Training...", 5)
+        text = re.sub(' +', ' ', text)  # add this line to remove consecutive spaces
         words = custom_lemmatizer(nlp(text))
 
         current_state = ('',) * self.order
@@ -158,6 +159,7 @@ class MarkovChatbot:
 
     def append_data(self, text):
         print_line("Appending data...", 5)
+        text = re.sub(' +', ' ', text)  # add this line to remove consecutive spaces
         # Insert text into data_file_table
         self.cursor.execute("""
             INSERT INTO data_file_table (room_name, data) VALUES (?, ?)
