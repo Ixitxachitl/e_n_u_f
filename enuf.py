@@ -204,30 +204,26 @@ class MarkovChatbot:
 
         # Coordinating conjunctions, cannot start or end a sentence.
         coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
-
         # Prepositions, cannot start a sentence.
         prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
                         'before', 'after', 'between', 'into', 'through', 'during',
                         'without', 'about', 'against', 'among', 'around', 'above',
                         'below', 'along', 'since', 'toward', 'upon'}
-
         # Other words that are not suitable to end a sentence.
-        additional_end_words = {'the', 'an', 'a', 'this', 'these', 'it', 'he', 'she', 'they', 'because'}
-
+        common_articles = {'the', 'an', 'a'}
+        pronouns = {'this', 'these', 'it', 'he', 'she', 'they'}
+        demonstratives = {'this', 'that', 'these', 'those'}
         # Words that represent numbers, not suitable to start a sentence.
         number_words = set(map(str, range(10)))
-
         # Symbols that are invalid as start words.
         invalid_start_symbols = {'/', '\\', '|', '?', '&', '%', '#', '-', '+', '^', '.', ',', ')'}
-
         # Symbols that are invalid as end words.
         invalid_end_symbols = {'/', '\\', '|', '&', '%', '#', '@', '-', '+', '^', ',', '('}
-
         # Gather all invalid start words.
         invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union(invalid_start_symbols)
-
         # Gather all invalid end words.
-        invalid_end_words = coord_conjunctions.union(additional_end_words).union(invalid_end_symbols).union(number_words)
+        invalid_end_words = coord_conjunctions.union(common_articles).union(pronouns).union(demonstratives).union(
+            invalid_end_symbols).union(number_words)
 
         split_input_text = [token.lemma_ for token in nlp(input_text)]
 
