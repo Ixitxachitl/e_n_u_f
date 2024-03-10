@@ -146,21 +146,10 @@ class MarkovChatbot:
         print_line("Training...", 5)
         words = custom_lemmatizer(nlp(text))
 
-        if len(words) == 1:
-            current_state = ('', '')
-            next_word = words[0]
-            self.update_transition_counts(current_state, next_word)
-
-        elif len(words) == 2:
-            current_state = ('', words[0])
-            next_word = words[1]
-            self.update_transition_counts(current_state, next_word)
-
-        else:
-            for i in range(len(words) - self.order):
-                current_state = tuple(words[i: i + self.order])
-                next_word = words[i + self.order]
-                self.update_transition_counts(current_state, next_word)
+        current_state = ('',) * self.order
+        for word in words:
+            self.update_transition_counts(current_state, word)
+            current_state = current_state[1:] + (word,)
 
         self.connection.commit()
         print_line("Training Completed!", 5)
