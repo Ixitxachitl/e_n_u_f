@@ -283,8 +283,8 @@ class MarkovChatbot:
                 # Default behavior is to add a space
                 space = " "
 
-                next_word_is_punctuation = next_word in {",", ".", ":", ";", "(", "[", "\"", "{", "'", "_", ")", "]",
-                                                         "}", "\""}
+                next_word_is_punctuation = eos_tokens or next_word in {",", ".", ":", ";", "(", "[", "\"", "{", "'", "_"
+                                                                       , ")", "]", "}", "\""}
                 previous_word_is_opening_punctuation = new_words and new_words[-1] in {"(", "[", "\"", "{", "'", "_"}
 
                 # Don't add a space if next word is punctuation
@@ -292,9 +292,6 @@ class MarkovChatbot:
                     space = ""
                 # Don't add a space if the previous word is an opening punctuation.
                 elif previous_word_is_opening_punctuation:
-                    space = ""
-                # Don't add a space if the next word is a closing punctuation
-                elif next_word in {")", "]", "}", "\"", "'", "_"}:
                     space = ""
                 # Don't add a space if the next word starts with an apostrophe
                 elif next_word.startswith("'") or next_word.startswith("’"):
@@ -433,11 +430,11 @@ class ChatBotHandler:
         # Calculate respond probability
         x = self.message_counter[msg.room.name]
         respond_probability = np.exp((x - max_messages) / 4)
-        print_line(f'Respond probability in {msg.room.name}: {round(respond_probability*100)}%', 2)
+        print_line(f'Respond probability in {msg.room.name}: {round(respond_probability * 100)}%', 2)
 
         # Generate a response if random value is less than respond probability
         random_val = random.random()
-        print_line(f'Rolled: {round(random_val*100)}', 3)
+        print_line(f'Rolled: {round(random_val * 100)}', 3)
 
         if random_val < respond_probability:
             response = self.chatbots[msg.room.name].generate(msg.text)
