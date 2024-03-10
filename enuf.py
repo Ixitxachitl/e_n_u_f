@@ -169,8 +169,7 @@ class MarkovChatbot:
 
     def generate(self, input_text, min_length=5, max_length=20):
         """
-        This function generates a message based on a higher order Markov model, where the order can dynamically change based
-        on the length of the input text.
+        This function generates a message based on a higher order Markov model.
 
         Inputs should be tokenized and lemmatized and the output is a sentence generated with such a treatment in mind.
 
@@ -281,14 +280,32 @@ class MarkovChatbot:
                     print_line(f"Chose a new current state: {current_state}", 7)
                     continue
 
-                space = "" if (next_word in eos_tokens or next_word.startswith("'") or next_word == ",") else " "
+                # Default behavior is to add a space
+                space = " "
 
+                next_word_is_punctuation = next_word in {",", ".", ":", ";", "(", "[", "\"", "{", "'", "_", ")", "]",
+                                                         "}", "\""}
+                previous_word_is_opening_punctuation = new_words and new_words[-1] in {"(", "[", "\"", "{", "'", "_"}
+
+                # Don't add a space if next word is punctuation
+                if next_word_is_punctuation:
+                    space = ""
+                # Don't add a space if the previous word is an opening punctuation.
+                elif previous_word_is_opening_punctuation:
+                    space = ""
+                # Don't add a space if the next word is a closing punctuation
+                elif next_word in {")", "]", "}", "\"", "'", "_"}:
+                    space = ""
+                # Don't add a space if the next word starts with an apostrophe
+                elif next_word.startswith("'") or next_word.startswith("’"):
+                    space = ""
                 # Only add the next word if it is not an eos token or if min length has been reached
                 # And ensuring that the last word is not an invalid end word
                 if (not (next_word in eos_tokens and (
                         len(new_words) < min_length or (len(new_words) > 1 and new_words[-2] in invalid_end_words)))
                         and next_word not in invalid_end_words):
-                    new_words.append(f"{space}{re.sub(' +', ' ', next_word.strip())}")
+                    next_word = f"{space}{re.sub(' +', ' ', next_word.strip())}"
+                    new_words.append(next_word)  # add next word
 
                 if len(current_state) > 2:
                     # We use only last two words and next_word to update the current_state
