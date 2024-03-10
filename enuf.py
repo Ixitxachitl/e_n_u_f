@@ -40,7 +40,7 @@ nlp_dict = set(w.lower_ for w in nlp.vocab)
 
 
 def print_line(text, line_num):
-    # print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
+    print('\033[{};0H'.format(line_num) + ' ' * 200)  # clear the line by writing 50 spaces
     print('\033[{};0H'.format(line_num) + text)  # write your text at the start of the cleared line
 
 
