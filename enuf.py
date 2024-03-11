@@ -336,12 +336,7 @@ class MarkovChatbot:
                     next_word = f"{space}{re.sub(' +', ' ', next_word.strip())}"
                     new_words.append(next_word)  # add next word
 
-                if len(current_state) > 2:
-                    # We use only last two words and next_word to update the current_state
-                    current_state = tuple((*current_state[-2:], next_word))
-                else:
-                    # Below is the old behavior
-                    current_state = tuple((*current_state[1:], next_word))
+                current_state = tuple((*current_state[1:], next_word))
 
                 if next_word in eos_tokens:
                     stop_reason = "Hit end-of-sentence token"
