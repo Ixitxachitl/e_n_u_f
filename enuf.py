@@ -470,13 +470,14 @@ class ChatBotHandler:
 
         if random_val < respond_probability:
             response = self.chatbots[msg.room.name].generate(msg.text)
+            # Reset message counter after a response is generated
+            self.message_counter[msg.room.name] = 0
             print_line(f'Generated in {msg.room.name}: {response}', 4)
+            await asyncio.sleep(random.randint(1, 5))
             if random.random() < 0.05:
                 await msg.reply(response)
             else:
                 await msg.chat.send_message(msg.room.name, response)
-            # Reset message counter after a response is sent
-            self.message_counter[msg.room.name] = 0
 
 
 async def run(oauth_token='', refresh_token=''):
