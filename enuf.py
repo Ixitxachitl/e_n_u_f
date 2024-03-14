@@ -308,7 +308,7 @@ class MarkovChatbot:
                 current_state = random.choice(list(self.transitions.keys()))
                 print_line(f"Chose a new current state: {current_state}", 7)
             else:
-                return possible_transitions
+                return possible_transitions, current_state
 
     def generate(self, input_text, min_length=5, max_length=20):
         """
@@ -361,7 +361,7 @@ class MarkovChatbot:
         while not generated_words:
             new_words = []
             while True:
-                possible_transitions = self.get_transitions(current_state, new_words)
+                possible_transitions, current_state = self.get_transitions(current_state, new_words)
 
                 x = len(new_words)
                 continuation_probability = 1 - math.exp((x - max_length) / 5)
