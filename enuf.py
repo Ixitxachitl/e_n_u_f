@@ -227,35 +227,20 @@ class MarkovChatbot:
         print(f"Last word: {last_word}")
         if last_word in self.eos_tokens:  # if last word is End Of Sentence (eos) token
             print(f"EOS detected")
-            if len(generated_words) > 4:  # if there are more than 4 words
-                state = [generated_words[-4].strip(), generated_words[-3].strip()]  # save the two words before the word immediately preceding the EOS token
-            elif len(generated_words) > 3:
-                state = ["", generated_words[
-                    -4].strip()] # if there are only four words, the state includes an empty string and the word two positions before the EOS token
-            else:
-                state = ["", ""]  # for all other cases, the state contains two empty strings
-            print(f"State before EOS: {state}")
+            state_index = -self.order - 1
             if generated_words[-2].lower() not in self.invalid_end_words:
                 return generated_words  # if the word immediately before the EOS token is valid, no replacement is needed; return the original words
             # if the word immediately before the EOS token is invalid, proceed to next phase to replace it
         else:  # if last word is not End Of Sentence (eos)
             if last_word.lower() not in self.invalid_end_words:  # to check if last word is invalid
                 return generated_words
-            print(f"Invalid last word: {last_word}")
-            if len(generated_words) > 2:
-                state = [generated_words[-3].strip(), generated_words[-2].strip()]  # save the state of last two words
-            elif len(generated_words) == 2:
-                state = ["", generated_words[-2].strip()]  # save the state of last two words
-            else:
-                state = ["", ""]  # if generated_words have only one word
+            state_index = -self.order
+
+        state = [""] * max(0, self.order - len(generated_words)) + generated_words[state_index: -1]
+        state = tuple(word.strip() for word in state)
 
         print(f"State: {state}")
         # proceed with the rest of the function for replacing the invalid end word
-
-        if len(state) < self.order:
-            state = ("",) * (self.order - len(state)) + tuple(state)
-        else:
-            state = tuple(state[-self.order:])
 
         print(f"Processed state: {state}")
         valid_end_words = [word for word in self.transitions[state] if word not in self.invalid_end_words]
