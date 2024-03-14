@@ -341,65 +341,61 @@ class MarkovChatbot:
         else:
             current_state = tuple(split_input_text[-self.order:])
 
-        generated_words = []
+        new_words = []
+        while True:
+            possible_transitions, current_state = self.get_transitions(current_state, new_words)
 
-        while not generated_words:
-            new_words = []
-            while True:
-                possible_transitions, current_state = self.get_transitions(current_state, new_words)
+            x = len(new_words)
+            continuation_probability = 1 - math.exp((x - max_length) / 5)
+            print_line(f"Continuation Probability: {round(continuation_probability * 100)}%", 9)
 
-                x = len(new_words)
-                continuation_probability = 1 - math.exp((x - max_length) / 5)
-                print_line(f"Continuation Probability: {round(continuation_probability * 100)}%", 9)
+            continue_generation = random.choices(
+                [True, False], weights=[continuation_probability, 1 - continuation_probability]
+            )[0]
 
-                continue_generation = random.choices(
-                    [True, False], weights=[continuation_probability, 1 - continuation_probability]
-                )[0]
+            transitions = list(possible_transitions.keys())
+            counts = list(possible_transitions.values())
+            total_count = sum(counts)
+            probabilities = [count / total_count for count in counts]
+            next_word = np.random.choice(transitions, p=probabilities)
 
-                transitions = list(possible_transitions.keys())
-                counts = list(possible_transitions.values())
-                total_count = sum(counts)
-                probabilities = [count / total_count for count in counts]
-                next_word = np.random.choice(transitions, p=probabilities)
+            print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
-                print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
+            next_word = self.format_new_word(next_word, new_words)
+            new_words.append(next_word)
 
-                next_word = self.format_new_word(next_word, new_words)
-                new_words.append(next_word)
+            current_state = tuple((*current_state[1:], next_word.strip()))
 
-                current_state = tuple((*current_state[1:], next_word.strip()))
+            # Check if the next word is an EOS token,
+            # in this case the generation of the sentence should also end,
+            # but we still need to ensure that the last word is valid.
+            if next_word in self.eos_tokens:
+                stop_reason = 'Hit end-of-sentence token'
+                if len(new_words) <= min_length:
+                    stop_reason += ', but sentence was too short so removed EOS token'
 
-                # Check if the next word is an EOS token,
-                # in this case the generation of the sentence should also end,
-                # but we still need to ensure that the last word is valid.
-                if next_word in self.eos_tokens:
-                    stop_reason = 'Hit end-of-sentence token'
-                    if len(new_words) <= min_length:
-                        stop_reason += ', but sentence was too short so removed EOS token'
+                    # Remove the EOS token at the end
+                    new_words.pop()
+                new_words = self.validate_and_update_end_word(new_words)
+                break
 
-                        # Remove the EOS token at the end
-                        new_words.pop()
-                    new_words = self.validate_and_update_end_word(new_words)
-                    break
+            if not continue_generation or len(new_words) >= max_length:
+                # Ensure that the last word is valid before ending the sentence generation
+                new_words = self.validate_and_update_end_word(new_words)
 
-                if not continue_generation or len(new_words) >= max_length:
-                    # Ensure that the last word is valid before ending the sentence generation
-                    new_words = self.validate_and_update_end_word(new_words)
+                # Set stop reason
+                if len(new_words) >= max_length:
+                    stop_reason = 'Reached maximum length'
+                else:
+                    stop_reason = 'Decided not to continue generation after ensuring last word is valid'
 
-                    # Set stop reason
-                    if len(new_words) >= max_length:
-                        stop_reason = 'Reached maximum length'
-                    else:
-                        stop_reason = 'Decided not to continue generation after ensuring last word is valid'
+                # Break the loop since the sentence is completed
+                break
 
-                    # Break the loop since the sentence is completed
-                    break
-
-            generated_words = new_words
-            print_line(f"Reason for stopping: {stop_reason}", 12)
-            generated_message = ''.join(generated_words).lstrip()
-            print_line(f"Final message: '{generated_message}'", 11)
-            return generated_message
+        print_line(f"Reason for stopping: {stop_reason}", 12)
+        generated_message = ''.join(new_words).lstrip()
+        print_line(f"Final message: '{generated_message}'", 11)
+        return generated_message
 
     @staticmethod
     def create_connection():
