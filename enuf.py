@@ -361,6 +361,9 @@ class MarkovChatbot:
                 )[0]
 
                 possible_transitions = self.transitions[current_state]
+                if len(new_words) == 0:
+                    possible_transitions = {word: freq for word, freq in possible_transitions.items() if
+                                            word.lower() not in self.invalid_start_words}
 
                 transitions = list(possible_transitions.keys())
                 counts = list(possible_transitions.values())
@@ -369,13 +372,6 @@ class MarkovChatbot:
                 next_word = np.random.choice(transitions, p=probabilities)
 
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
-
-                if len(new_words) == 0 and (next_word.lower() in self.invalid_start_words or next_word.startswith("'")
-                                            or next_word.isdigit()):
-                    print_line(f"The chosen word '{next_word}' is an invalid start word, restarting selection.", 10)
-                    current_state = random.choice(list(self.transitions.keys()))
-                    print_line(f"Chose a new current state: {current_state}", 7)
-                    continue
 
                 self.format_new_word(next_word, new_words)
                 new_words.append(next_word)
