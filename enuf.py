@@ -285,7 +285,7 @@ class MarkovChatbot:
 
         print(f"New word: {new_word}")
 
-        self.format_new_word(new_word, generated_words)
+        new_word = self.format_new_word(new_word, generated_words)
 
         # replace either the last word with it or if the last word was an eos token replace the one before it.
         if last_word in self.eos_tokens:
@@ -373,7 +373,7 @@ class MarkovChatbot:
 
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
-                self.format_new_word(next_word, new_words)
+                next_word = self.format_new_word(next_word, new_words)
                 new_words.append(next_word)
 
                 current_state = tuple((*current_state[1:], next_word.strip()))
