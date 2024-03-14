@@ -208,9 +208,9 @@ class MarkovChatbot:
         space = " "
         next_word_is_punctuation = new_word in self.eos_tokens or new_word in {",", ".", ":", ";", "(", "[", "\"",
                                                                                "{", "'", "_", "...",
-                                                                               ")", "]", "}", "\""}
+                                                                               ")", "]", "}", "\"", "-"}
         previous_word_is_opening_punctuation = generated_words and generated_words[-1] in {"(", "[", "\"", "{", "'",
-                                                                                           "_"}
+                                                                                           "_", "-"}
 
         if next_word_is_punctuation:
             space = ""
