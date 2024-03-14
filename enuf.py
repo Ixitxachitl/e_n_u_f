@@ -204,37 +204,53 @@ class MarkovChatbot:
         self.train(text)
         print_line("Appended data and updated transitions!", 5)
 
+    def format_new_word(self, new_word, generated_words):
+        space = " "
+        next_word_is_punctuation = new_word in self.eos_tokens or new_word in {",", ".", ":", ";", "(", "[", "\"",
+                                                                               "{", "'", "_", "...",
+                                                                               ")", "]", "}", "\""}
+        previous_word_is_opening_punctuation = generated_words and generated_words[-1] in {"(", "[", "\"", "{", "'",
+                                                                                           "_"}
+
+        if next_word_is_punctuation:
+            space = ""
+        elif previous_word_is_opening_punctuation:
+            space = ""
+        elif new_word.startswith("'") or new_word.startswith("’"):
+            space = ""
+
+        return f"{space}{re.sub(' +', ' ', new_word.strip())}"
+
     def validate_and_update_end_word(self, generated_words):
         print(f"Initial words: {generated_words}")
-        if generated_words:
-            last_word = generated_words[-1].strip()
-            print(f"Last word: {last_word}")
-            if last_word in self.eos_tokens:  # if last word is End Of Sentence (eos) token
-                print(f"EOS detected")
-                if len(generated_words) > 4:  # if there are more than 4 words
-                    state = [generated_words[-4].strip(), generated_words[-3].strip()]  # save the two words before the word immediately preceding the EOS token
-                elif len(generated_words) > 3:
-                    state = ["", generated_words[
-                        -4].strip()] # if there are only four words, the state includes an empty string and the word two positions before the EOS token
-                else:
-                    state = ["", ""]  # for all other cases, the state contains two empty strings
-                print(f"State before EOS: {state}")
-                if generated_words[-2].lower() not in self.invalid_end_words:
-                    return generated_words  # if the word immediately before the EOS token is valid, no replacement is needed; return the original words
-                # if the word immediately before the EOS token is invalid, proceed to next phase to replace it
-            else:  # if last word is not End Of Sentence (eos)
-                if last_word.lower() not in self.invalid_end_words:  # to check if last word is invalid
-                    return generated_words
-                print(f"Invalid last word: {last_word}")
-                if len(generated_words) > 2:
-                    state = [generated_words[-3].strip(), generated_words[-2].strip()]  # save the state of last two words
-                elif len(generated_words) == 2:
-                    state = ["", generated_words[-2].strip()]  # save the state of last two words
-                else:
-                    state = ["", ""]  # if generated_words have only one word
+        last_word = generated_words[-1].strip()
+        print(f"Last word: {last_word}")
+        if last_word in self.eos_tokens:  # if last word is End Of Sentence (eos) token
+            print(f"EOS detected")
+            if len(generated_words) > 4:  # if there are more than 4 words
+                state = [generated_words[-4].strip(), generated_words[-3].strip()]  # save the two words before the word immediately preceding the EOS token
+            elif len(generated_words) > 3:
+                state = ["", generated_words[
+                    -4].strip()] # if there are only four words, the state includes an empty string and the word two positions before the EOS token
+            else:
+                state = ["", ""]  # for all other cases, the state contains two empty strings
+            print(f"State before EOS: {state}")
+            if generated_words[-2].lower() not in self.invalid_end_words:
+                return generated_words  # if the word immediately before the EOS token is valid, no replacement is needed; return the original words
+            # if the word immediately before the EOS token is invalid, proceed to next phase to replace it
+        else:  # if last word is not End Of Sentence (eos)
+            if last_word.lower() not in self.invalid_end_words:  # to check if last word is invalid
+                return generated_words
+            print(f"Invalid last word: {last_word}")
+            if len(generated_words) > 2:
+                state = [generated_words[-3].strip(), generated_words[-2].strip()]  # save the state of last two words
+            elif len(generated_words) == 2:
+                state = ["", generated_words[-2].strip()]  # save the state of last two words
+            else:
+                state = ["", ""]  # if generated_words have only one word
 
-            print(f"State: {state}")
-            # proceed with the rest of the function for replacing the invalid end word
+        print(f"State: {state}")
+        # proceed with the rest of the function for replacing the invalid end word
 
         if len(state) < self.order:
             state = ("",) * (self.order - len(state)) + tuple(state)
@@ -269,22 +285,7 @@ class MarkovChatbot:
 
         print(f"New word: {new_word}")
 
-        # Adding space before generated new_word
-        space = " "
-        next_word_is_punctuation = new_word in self.eos_tokens or new_word in {",", ".", ":", ";", "(", "[", "\"",
-                                                                               "{", "'", "_", "...",
-                                                                               ")", "]", "}", "\""}
-        previous_word_is_opening_punctuation = generated_words and generated_words[-1] in {"(", "[", "\"", "{", "'",
-                                                                                           "_"}
-
-        if next_word_is_punctuation:
-            space = ""
-        elif previous_word_is_opening_punctuation:
-            space = ""
-        elif new_word.startswith("'") or new_word.startswith("’"):
-            space = ""
-
-        new_word = f"{space}{re.sub(' +', ' ', new_word.strip())}"
+        self.format_new_word(new_word, generated_words)
 
         # replace either the last word with it or if the last word was an eos token replace the one before it.
         if last_word in self.eos_tokens:
@@ -376,20 +377,7 @@ class MarkovChatbot:
                     print_line(f"Chose a new current state: {current_state}", 7)
                     continue
 
-                space = " "
-                next_word_is_punctuation = next_word in self.eos_tokens or next_word in {",", ".", ":", ";", "(", "[", "\"",
-                                                                                    "{", "'", "_", "...",
-                                                                                    ")", "]", "}", "\""}
-                previous_word_is_opening_punctuation = new_words and new_words[-1] in {"(", "[", "\"", "{", "'", "_"}
-
-                if next_word_is_punctuation:
-                    space = ""
-                elif previous_word_is_opening_punctuation:
-                    space = ""
-                elif next_word.startswith("'") or next_word.startswith("’"):
-                    space = ""
-
-                next_word = f"{space}{re.sub(' +', ' ', next_word.strip())}"
+                self.format_new_word(next_word, new_words)
                 new_words.append(next_word)
 
                 current_state = tuple((*current_state[1:], next_word.strip()))
