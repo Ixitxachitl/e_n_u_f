@@ -315,15 +315,17 @@ class MarkovChatbot:
            length allowed. A decision to continue or terminate the generation is made by sampling from a set [True, False]
            using the calculated continuation probability and its complement.
         6. If an EOS token is encountered during the generation, or the generation decision returned False, or the maximum
-           length of sentence is reached, the function first ensures that the last word of the generated sentence is valid. If
-           the last word is not valid, it substitutes it with a valid end word.
+           length of the sentence is reached, the function first ensures that the last word of the generated sentence is valid.
+           If the last word is not valid, it substitutes it with a valid end word.
         7. If the EOS token is hit, but the total length of the sentence is less than the required minimum length, the EOS
-           token is removed and the function ensures that the last word in the sentence is a valid one after removal of the EOS token.
-        8. The function then checks if sentence generation needs to continue based on length restrictions and whether an EOS token
-           has been encountered or not. It stops and returns the generated sentence when:
-           a. A valid EOS token is encountered and the generated sentence meets the minimum length requirement, or
-           b. The maximum length of the sentence is reached regardless of whether an EOS token has been encountered or not, or
-           c. Continuation probability returned False and the last word of the sentence is a valid word.
+           token is removed, and the function ensures that the last word in the sentence is a valid one after removal of the
+           EOS token.
+        8. The function then checks if sentence generation needs to continue based on length restrictions and whether an EOS
+           token has been encountered or not. It stops and returns the generated sentence when:
+           a. a valid EOS token is encountered. At this point, if the total length of the sentence is less than the required
+              minimum length, the EOS token is removed, but the generation does not continue.
+           b. maximum length of the sentence is reached regardless of whether an EOS token has been encountered or not, or
+           c. continuation probability returned False and the last word of the sentence is a valid word.
         """
 
 
