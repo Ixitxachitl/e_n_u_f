@@ -303,37 +303,29 @@ class MarkovChatbot:
 
         The process is defined as follows:
 
-        1. The function initializes with given input text and determines the current state based on input size and the
-        order of the Markov model.
-
-        2. It starts the main generation loop. Within this loop, it first calculates the continuation probability based on
-        the length of the generated text and the maximum word limit.
-
-        3. The function then decides whether to continue generating words based on the calculated probability.
-
-        4. If the current state does not exist in the transition matrix or all potential next words are invalid, it chooses a new
-        random current state.
-
-        5. The next word is chosen based on transition probabilities from the current state. If the next word is potentially
-        the last word (due to reaching maximum length or low continuation probability) and it's invalid as an end word or
-        it is an end-of-sentence (EOS) token with an invalid prior word, it replaces it with a valid one.
-
-        6. If the generation does not continue, it checks if the last generated word is valid. If not, it reruns the
-        generation loop.
-
-        7. If the next word starts a new sentence and it's declared invalid, it chooses a new random state and reruns the
-        generation loop.
-
-        8. If the next word is not an EOS token and it's not an invalid end word, it is added into the list of generated words.
-
-        9. The current state is updated for the next word based on the Markov model's order.
-
-        10. Generation is stopped if an EOS token is generated or the maximum length is reached.
-
-        Finally, it returns a joined string of the generated words. The function ensures that it doesn't produce sentences
-        starting with coordinating conjunctions, prepositions, and certain symbols. It also confirms that the sentences
-        don't end with coordinating conjunctions, common articles, pronouns, demonstratives and other invalid symbols.
+        1. Split the input text into individual words.
+        2. Check if the number of words in the input text is less than the order of the Markov chain. If so, an empty string is
+           added to the current state until it equals the order in size, followed by the input text. If not, the current state
+           is set as the last n-words of the input text, where n is the order of the Markov chain.
+        3. The generation process is started by initializing an empty list for the new words to be generated. This process
+           continues until a termination condition is met.
+        4. For each new word generation, it checks the list of possible transitions and selects the next word based on
+           its probability. The new word is added to the list and the current state is updated.
+        5. The continuation probability is calculated based on the current length of the generated text and the maximum
+           length allowed. A decision to continue or terminate the generation is made by sampling from a set [True, False]
+           using the calculated continuation probability and its complement.
+        6. If an EOS token is encountered during the generation, or the generation decision returned False, or the maximum
+           length of sentence is reached, the function first ensures that the last word of the generated sentence is valid. If
+           the last word is not valid, it substitutes it with a valid end word.
+        7. If the EOS token is hit, but the total length of the sentence is less than the required minimum length, the EOS
+           token is removed and the function ensures that the last word in the sentence is a valid one after removal of the EOS token.
+        8. The function then checks if sentence generation needs to continue based on length restrictions and whether an EOS token
+           has been encountered or not. It stops and returns the generated sentence when:
+           a. A valid EOS token is encountered and the generated sentence meets the minimum length requirement, or
+           b. The maximum length of the sentence is reached regardless of whether an EOS token has been encountered or not, or
+           c. Continuation probability returned False and the last word of the sentence is a valid word.
         """
+
 
         split_input_text = [token.text for token in nlp(input_text)]
         if len(split_input_text) < self.order:
