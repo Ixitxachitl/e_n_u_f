@@ -295,6 +295,21 @@ class MarkovChatbot:
         print(f"Final words: {generated_words}")
         return generated_words
 
+    def get_transitions(self, current_state, new_words):
+        while True:
+            possible_transitions = self.transitions.get(current_state, {})
+            if len(new_words) == 0:
+                possible_transitions = {word: freq for word, freq in possible_transitions.items() if
+                                        word.lower() not in self.invalid_start_words}
+
+            # If no viable transitions, choose a new state
+            if not possible_transitions:
+                print_line(f"No transitions for {current_state}", 6)
+                current_state = random.choice(list(self.transitions.keys()))
+                print_line(f"Chose a new current state: {current_state}", 7)
+            else:
+                return possible_transitions
+
     def generate(self, input_text, min_length=5, max_length=20):
         """
         This function generates text based on a higher-order Markov transition matrix model. The model leverages the
@@ -342,15 +357,11 @@ class MarkovChatbot:
             current_state = tuple(split_input_text[-self.order:])
 
         generated_words = []
-        stop_reason = ''
 
         while not generated_words:
             new_words = []
             while True:
-                if current_state not in self.transitions or not self.transitions[current_state]:
-                    print_line(f"No transitions for {current_state}", 6)
-                    current_state = random.choice(list(self.transitions.keys()))
-                    print_line(f"Chose a new current state: {current_state}", 7)
+                possible_transitions = self.get_transitions(current_state, new_words)
 
                 x = len(new_words)
                 continuation_probability = 1 - math.exp((x - max_length) / 5)
@@ -359,11 +370,6 @@ class MarkovChatbot:
                 continue_generation = random.choices(
                     [True, False], weights=[continuation_probability, 1 - continuation_probability]
                 )[0]
-
-                possible_transitions = self.transitions[current_state]
-                if len(new_words) == 0:
-                    possible_transitions = {word: freq for word, freq in possible_transitions.items() if
-                                            word.lower() not in self.invalid_start_words}
 
                 transitions = list(possible_transitions.keys())
                 counts = list(possible_transitions.values())
