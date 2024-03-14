@@ -73,6 +73,30 @@ class MarkovChatbot:
         self.order = order
         self.transitions = collections.defaultdict(collections.Counter)
         self.room_name = room_name
+
+        # Coordinating conjunctions, cannot start or end a sentence.
+        coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
+        # Prepositions, cannot start or end a sentence.
+        prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
+                        'before', 'after', 'between', 'into', 'through', 'during',
+                        'without', 'about', 'against', 'among', 'around', 'above',
+                        'below', 'along', 'since', 'toward', 'upon'}
+        # Other words that are not suitable to end a sentence.
+        common_articles = {'the', 'an', 'a'}
+        pronouns = {'this', 'these', 'it', 'he', 'she', 'they'}
+        demonstratives = {'this', 'that', 'these', 'those'}
+        # Words that represent numbers, not suitable to start a sentence.
+        number_words = set(map(str, range(10)))
+        # Symbols that are invalid as start words.
+        invalid_start_symbols = {'/', '\\', '|', '?', '&', '%', '#', '-', '+', '^', '.', ',', ')'}
+        # Symbols that are invalid as end words.
+        invalid_end_symbols = {'/', '\\', '|', '&', '%', '#', '@', '-', '+', '^', ',', '('}
+        self.eos_tokens = {'.', '!', '?'}
+        # Gather all invalid start words.
+        self.invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union(invalid_start_symbols)
+        self.invalid_end_words = coord_conjunctions.union(common_articles).union(pronouns).union(demonstratives).union(
+            invalid_end_symbols).union(number_words).union(prepositions)
+
         # If connection does not exist, create it.
         if MarkovChatbot.db_connection is None or MarkovChatbot.db_cursor is None:
             self.connection = self.create_connection()
@@ -180,6 +204,96 @@ class MarkovChatbot:
         self.train(text)
         print_line("Appended data and updated transitions!", 5)
 
+    def validate_and_update_end_word(self, generated_words):
+        print(f"Initial words: {generated_words}")
+        if generated_words:
+            last_word = generated_words[-1].strip()
+            print(f"Last word: {last_word}")
+            if last_word in self.eos_tokens:  # if last word is End Of Sentence (eos) token
+                print(f"EOS detected")
+                if len(generated_words) > 4:  # if there are more than 4 words
+                    state = [generated_words[-4].strip(), generated_words[-3].strip()]  # save the two words before the word immediately preceding the EOS token
+                elif len(generated_words) > 3:
+                    state = ["", generated_words[
+                        -4].strip()] # if there are only four words, the state includes an empty string and the word two positions before the EOS token
+                else:
+                    state = ["", ""]  # for all other cases, the state contains two empty strings
+                print(f"State before EOS: {state}")
+                if generated_words[-2].lower() not in self.invalid_end_words:
+                    return generated_words  # if the word immediately before the EOS token is valid, no replacement is needed; return the original words
+                # if the word immediately before the EOS token is invalid, proceed to next phase to replace it
+            else:  # if last word is not End Of Sentence (eos)
+                if last_word.lower() not in self.invalid_end_words:  # to check if last word is invalid
+                    return generated_words
+                print(f"Invalid last word: {last_word}")
+                if len(generated_words) > 2:
+                    state = [generated_words[-3].strip(), generated_words[-2].strip()]  # save the state of last two words
+                elif len(generated_words) == 2:
+                    state = ["", generated_words[-2].strip()]  # save the state of last two words
+                else:
+                    state = ["", ""]  # if generated_words have only one word
+
+            print(f"State: {state}")
+            # proceed with the rest of the function for replacing the invalid end word
+
+        if len(state) < self.order:
+            state = ("",) * (self.order - len(state)) + tuple(state)
+        else:
+            state = tuple(state[-self.order:])
+
+        print(f"Processed state: {state}")
+        valid_end_words = [word for word in self.transitions[state] if word not in self.invalid_end_words]
+        valid_end_words = [word for word in valid_end_words if word not in self.eos_tokens]
+
+        print(f"Valid end words for state: {valid_end_words}")
+
+        if valid_end_words:
+            new_word = random.choice(valid_end_words)
+        else:  # if no valid end word found for present state
+            print(f"No valid end words found for present state.")
+            for possible_state in self.transitions:
+                valid_end_words = [word for word in self.transitions[possible_state] if
+                                   word not in self.invalid_end_words]
+                valid_end_words = [word for word in valid_end_words if word not in self.eos_tokens]
+                if valid_end_words:
+                    new_word = random.choice(valid_end_words)
+                    print(f"New valid end word found in the transitions for a different state {possible_state}: {new_word}")
+                    break
+            else:  # if no valid end word found for any state
+                print(f"No valid end words found for any state.")
+                state = random.choice(list(self.transitions.keys()))  # pick a random state with a valid transition
+                new_word = random.choice(
+                    list(self.transitions[
+                             state]))  # picking another random new word, without checking for eos_token here
+                print(f"Randomly selected new word: {new_word}")
+
+        print(f"New word: {new_word}")
+
+        # Adding space before generated new_word
+        space = " "
+        next_word_is_punctuation = new_word in self.eos_tokens or new_word in {",", ".", ":", ";", "(", "[", "\"",
+                                                                               "{", "'", "_", "...",
+                                                                               ")", "]", "}", "\""}
+        previous_word_is_opening_punctuation = generated_words and generated_words[-1] in {"(", "[", "\"", "{", "'",
+                                                                                           "_"}
+
+        if next_word_is_punctuation:
+            space = ""
+        elif previous_word_is_opening_punctuation:
+            space = ""
+        elif new_word.startswith("'") or new_word.startswith("’"):
+            space = ""
+
+        new_word = f"{space}{re.sub(' +', ' ', new_word.strip())}"
+
+        # replace either the last word with it or if the last word was an eos token replace the one before it.
+        if last_word in self.eos_tokens:
+            generated_words[-2] = new_word
+        else:
+            generated_words[-1] = new_word
+        print(f"Final words: {generated_words}")
+        return generated_words
+
     def generate(self, input_text, min_length=5, max_length=20):
         """
         This function generates text based on a higher-order Markov transition matrix model. The model leverages the
@@ -220,28 +334,6 @@ class MarkovChatbot:
         don't end with coordinating conjunctions, common articles, pronouns, demonstratives and other invalid symbols.
         """
 
-        # Coordinating conjunctions, cannot start or end a sentence.
-        coord_conjunctions = {'for', 'and', 'nor', 'but', 'or', 'yet', 'so'}
-        # Prepositions, cannot start or end a sentence.
-        prepositions = {'in', 'at', 'on', 'of', 'to', 'up', 'with', 'over', 'under',
-                        'before', 'after', 'between', 'into', 'through', 'during',
-                        'without', 'about', 'against', 'among', 'around', 'above',
-                        'below', 'along', 'since', 'toward', 'upon'}
-        # Other words that are not suitable to end a sentence.
-        common_articles = {'the', 'an', 'a'}
-        pronouns = {'this', 'these', 'it', 'he', 'she', 'they'}
-        demonstratives = {'this', 'that', 'these', 'those'}
-        # Words that represent numbers, not suitable to start a sentence.
-        number_words = set(map(str, range(10)))
-        # Symbols that are invalid as start words.
-        invalid_start_symbols = {'/', '\\', '|', '?', '&', '%', '#', '-', '+', '^', '.', ',', ')'}
-        # Symbols that are invalid as end words.
-        invalid_end_symbols = {'/', '\\', '|', '&', '%', '#', '@', '-', '+', '^', ',', '('}
-        # Gather all invalid start words.
-        invalid_start_words = coord_conjunctions.union(prepositions).union(number_words).union(invalid_start_symbols)
-        invalid_end_words = coord_conjunctions.union(common_articles).union(pronouns).union(demonstratives).union(
-            invalid_end_symbols).union(number_words).union(prepositions)
-
         split_input_text = [token.text for token in nlp(input_text)]
         if len(split_input_text) < self.order:
             current_state = ("",) * (self.order - len(split_input_text)) + tuple(split_input_text)
@@ -249,7 +341,6 @@ class MarkovChatbot:
             current_state = tuple(split_input_text[-self.order:])
 
         generated_words = []
-        eos_tokens = {'.', '!', '?'}
         stop_reason = ''
 
         while not generated_words:
@@ -270,54 +361,15 @@ class MarkovChatbot:
 
                 possible_transitions = self.transitions[current_state]
 
-                while all(word in invalid_end_words for word in possible_transitions.keys()):
-                    print_line(f"All possible transitions were invalid, chose a new current state: {current_state}",
-                               10)
-                    current_state = random.choice(list(self.transitions.keys()))
-                    possible_transitions = self.transitions[current_state]
-
                 transitions = list(possible_transitions.keys())
                 counts = list(possible_transitions.values())
                 total_count = sum(counts)
                 probabilities = [count / total_count for count in counts]
                 next_word = np.random.choice(transitions, p=probabilities)
 
-                is_last_word = len(new_words) == max_length - 1 or not continue_generation or (
-                        new_words and new_words[-1] in eos_tokens)
-
-                while ((is_last_word and next_word in invalid_end_words) or
-                       (len(new_words) == 0 and next_word in invalid_start_words)):
-
-                    while next_word in eos_tokens and new_words and new_words[-1] in invalid_end_words:
-                        print_line(f"Can't end sentence with '{new_words[-1]}' before {next_word}", 10)
-                        current_state = random.choice(list(self.transitions.keys()))
-                        possible_transitions = self.transitions[current_state]
-
-                    while all(word in invalid_end_words for word in possible_transitions.keys()):
-                        print_line(
-                            f"All possible transitions were invalid again, chose a new current state: {current_state}",
-                            10)
-                        current_state = random.choice(list(self.transitions.keys()))
-                        possible_transitions = self.transitions[current_state]
-
-                    transitions = list(possible_transitions.keys())
-                    counts = list(possible_transitions.values())
-                    total_count = sum(counts)
-                    probabilities = [count / total_count for count in counts]
-                    next_word = np.random.choice(transitions, p=probabilities)
-                    is_last_word = len(new_words) == max_length - 1 or not continue_generation or (
-                            new_words and new_words[-1] in eos_tokens)
-
-                if not continue_generation:
-                    if len(new_words) == 0 or new_words[-1] in invalid_end_words:
-                        stop_reason = "The chosen end word is invalid, re-choosing."
-                        continue
-                    stop_reason = "Decided not to continue generation"
-                    break
-
                 print_line(f"Chose transition from '{current_state}' to '{next_word}'", 8)
 
-                if len(new_words) == 0 and (next_word in invalid_start_words or next_word.startswith("'")
+                if len(new_words) == 0 and (next_word.lower() in self.invalid_start_words or next_word.startswith("'")
                                             or next_word.isdigit()):
                     print_line(f"The chosen word '{next_word}' is an invalid start word, restarting selection.", 10)
                     current_state = random.choice(list(self.transitions.keys()))
@@ -325,7 +377,7 @@ class MarkovChatbot:
                     continue
 
                 space = " "
-                next_word_is_punctuation = next_word in eos_tokens or next_word in {",", ".", ":", ";", "(", "[", "\"",
+                next_word_is_punctuation = next_word in self.eos_tokens or next_word in {",", ".", ":", ";", "(", "[", "\"",
                                                                                     "{", "'", "_", "...",
                                                                                     ")", "]", "}", "\""}
                 previous_word_is_opening_punctuation = new_words and new_words[-1] in {"(", "[", "\"", "{", "'", "_"}
@@ -336,27 +388,43 @@ class MarkovChatbot:
                     space = ""
                 elif next_word.startswith("'") or next_word.startswith("’"):
                     space = ""
-                if (not (next_word in eos_tokens and (
-                        len(new_words) < min_length or (len(new_words) > 1 and new_words[-2] in invalid_end_words)))
-                        and next_word not in invalid_end_words):
-                    next_word = f"{space}{re.sub(' +', ' ', next_word.strip())}"
-                    new_words.append(next_word)
+
+                next_word = f"{space}{re.sub(' +', ' ', next_word.strip())}"
+                new_words.append(next_word)
 
                 current_state = tuple((*current_state[1:], next_word.strip()))
 
-                if next_word in eos_tokens:
-                    stop_reason = "Hit end-of-sentence token"
-                    break
-                if len(new_words) >= max_length:
-                    stop_reason = "Reached maximum length"
+                # Check if the next word is an EOS token,
+                # in this case the generation of the sentence should also end,
+                # but we still need to ensure that the last word is valid.
+                if next_word in self.eos_tokens:
+                    stop_reason = 'Hit end-of-sentence token'
+                    if len(new_words) <= min_length:
+                        stop_reason += ', but sentence was too short so removed EOS token'
+
+                        # Remove the EOS token at the end
+                        new_words.pop()
+                    new_words = self.validate_and_update_end_word(new_words)
                     break
 
-            print_line(f"Reason for stopping: {stop_reason}", 12)
+                if not continue_generation or len(new_words) >= max_length:
+                    # Ensure that the last word is valid before ending the sentence generation
+                    new_words = self.validate_and_update_end_word(new_words)
+
+                    # Set stop reason
+                    if len(new_words) >= max_length:
+                        stop_reason = 'Reached maximum length'
+                    else:
+                        stop_reason = 'Decided not to continue generation after ensuring last word is valid'
+
+                    # Break the loop since the sentence is completed
+                    break
+
             generated_words = new_words
-
-        generated_message = ''.join(generated_words).lstrip()
-        print_line(f"Final message: '{generated_message}'", 11)
-        return generated_message
+            print_line(f"Reason for stopping: {stop_reason}", 12)
+            generated_message = ''.join(generated_words).lstrip()
+            print_line(f"Final message: '{generated_message}'", 11)
+            return generated_message
 
     @staticmethod
     def create_connection():
@@ -445,7 +513,7 @@ class ChatBotHandler:
             print_line(f'{self.name} is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
             await ready_event.chat.join_room(TARGET_CHANNEL)
 
-    async def handle_incoming_message(self, msg: ChatMessage, max_messages=40):
+    async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         if msg.room.name == msg.chat.username:
             return
         if msg.user.name in self.ignore_users:
