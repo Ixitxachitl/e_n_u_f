@@ -339,7 +339,7 @@ class MarkovChatbot:
             possible_transitions, current_state = self.get_transitions(current_state, new_words)
 
             x = len(new_words)
-            continuation_probability = (1 - ((x / max_length) ** 2))
+            continuation_probability = 1 - ((x / max_length) ** 2)
             print_line(f"Continuation Probability: {round(continuation_probability * 100)}%", 9)
 
             continue_generation = random.choices(
