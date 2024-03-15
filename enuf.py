@@ -340,8 +340,7 @@ class MarkovChatbot:
             possible_transitions, current_state = self.get_transitions(current_state, new_words)
 
             x = len(new_words)
-            continuation_probability = (1 - (np.exp((x - max_length) / 10) - np.exp((1 - max_length) / 10))
-                                        / (np.exp((max_length - max_length) / 10) - np.exp((1 - max_length) / 10)))
+            continuation_probability = 1 - (np.exp((x - max_length) / 10) - np.exp((1 - max_length) / 10))
             print_line(f"Continuation Probability: {round(continuation_probability * 100)}%", 9)
 
             continue_generation = random.choices(
@@ -494,8 +493,9 @@ class ChatBotHandler:
 
         # Calculate respond probability
         x = self.message_counter[msg.room.name]
-        respond_probability = (np.exp((x - (max_messages + 1)) / 5) - np.exp((1 - (max_messages + 1)) / 5)) / (
-            np.exp((max_messages - (max_messages + 1)) / 5) - np.exp((1 - (max_messages + 1)) / 5))
+        const_term = np.exp(-1 / 5)
+        respond_probability = (np.exp((x - max_messages - 1) / 5) - const_term) / (
+                const_term - np.exp((1 - max_messages - 1) / 5))
         print_line(f'Respond probability in {msg.room.name}: {round(respond_probability * 100)}%', 2)
 
         # Generate a response if random value is less than respond probability
