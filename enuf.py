@@ -2,7 +2,6 @@ import asyncio
 import collections
 import configparser
 import json
-import math
 import numpy as np
 import random
 import re
