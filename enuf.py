@@ -327,7 +327,6 @@ class MarkovChatbot:
            c. continuation probability returned False and the last word of the sentence is a valid word.
         """
 
-
         split_input_text = [token.text for token in nlp(input_text)]
         if len(split_input_text) < self.order:
             current_state = ("",) * (self.order - len(split_input_text)) + tuple(split_input_text)

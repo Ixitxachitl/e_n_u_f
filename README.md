@@ -23,7 +23,7 @@ Clone this repository into your local machine.
   
 - Add `http://localhost:17563` to your Redirect URI list.
 
-- Copy the Client ID and Client Secret and open the `config.ini` file and replace the `APP_ID` and `APP_SECRET` with your Client ID and Client Secret that were just copied.
+- Copy the Client ID and Client Secret and open the `config.ini` file and fill in the `APP_ID` and `APP_SECRET` with your Client ID and Client Secret that were just copied.
 
 The `config.ini` file should look as follows:
 
