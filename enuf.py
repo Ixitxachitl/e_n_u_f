@@ -209,7 +209,7 @@ class MarkovChatbot:
                                                                                "{", "'", "_", "...",
                                                                                ")", "]", "}", "\"", "-"}
         previous_word_is_opening_punctuation = generated_words and generated_words[-1] in {"(", "[", "\"", "{", "'",
-                                                                                           "_", "-"}
+                                                                                           "_", "-", "$"}
 
         if next_word_is_punctuation:
             space = ""
@@ -284,7 +284,9 @@ class MarkovChatbot:
             possible_transitions = self.transitions.get(current_state, {})
             if len(new_words) == 0:
                 possible_transitions = {word: freq for word, freq in possible_transitions.items() if
-                                        word.lower() not in self.invalid_start_words and word not in self.eos_tokens}
+                                        word.lower() not in self.invalid_start_words and
+                                        not word.startswith(("'", "’")) and
+                                        word not in self.eos_tokens}
 
             # If no viable transitions, choose a new state
             if not possible_transitions:
