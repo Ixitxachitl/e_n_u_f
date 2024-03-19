@@ -11,7 +11,7 @@ from typing import Dict
 
 import nltk
 from nltk.corpus import wordnet
-# python -m nltk.downloader averaged_perceptron_tagger wordnet
+# python -m nltk.downloader wordnet
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatCommand
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.twitch import Twitch
@@ -284,7 +284,7 @@ class MarkovChatbot:
             possible_transitions = self.transitions.get(current_state, {})
             if len(new_words) == 0:
                 possible_transitions = {word: freq for word, freq in possible_transitions.items() if
-                                        word.lower() not in self.invalid_start_words}
+                                        word.lower() not in self.invalid_start_words and word not in self.eos_tokens}
 
             # If no viable transitions, choose a new state
             if not possible_transitions:
