@@ -286,7 +286,7 @@ class MarkovChatbot:
                 possible_transitions = {word: freq for word, freq in possible_transitions.items() if
                                         word.lower() not in self.invalid_start_words and
                                         not word.startswith(("'", "’")) and
-                                        word not in self.eos_tokens}
+                                        word not in self.eos_tokens and not word.isdigit()}
 
             # If no viable transitions, choose a new state
             if not possible_transitions:
