@@ -235,7 +235,10 @@ class MarkovChatbot:
                 return generated_words
             state_index = -self.order
 
-        state = [""] * max(0, self.order - len(generated_words)) + generated_words[state_index: -1]
+        # This line will clip or pad the sliced list to match self.order
+        state_words = generated_words[max(0, state_index - self.order + 1):state_index + 1]
+        # This line will pad with '' in case we have less than self.order words
+        state = [""] * (self.order - len(state_words)) + state_words
         state = tuple(word.strip() for word in state)
 
         print(f"State: {state}")
