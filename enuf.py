@@ -438,7 +438,7 @@ class ChatBotHandler:
         self.message_counter: Dict[str, int] = {}
         # Initialize ignore_users list
         self.ignore_users = ['streamelements', 'streamlabs', 'nightbot', 'soundalerts', 'buttsbot', 'sery_bot',
-                             'pokemoncommunitygame', 'elbierro', 'streamlootsbot', 'kofistreambot']
+                             'pokemoncommunitygame', 'elbierro', 'streamlootsbot', 'kofistreambot', 'blerp']
 
     async def join_room(self, cmd: ChatCommand):
         if (cmd.room.name == cmd.chat.username and cmd.user.name not in target_channels
