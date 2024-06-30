@@ -1,6 +1,7 @@
 import asyncio
 import collections
 import configparser
+import csv
 import json
 import numpy as np
 import random
@@ -478,14 +479,34 @@ class ChatBotHandler:
         await ready_event.chat.join_room(self.name)
         print_line(f'{self.name} joined it\'s own channel', 0)
         if TARGET_CHANNEL:
-            print_line(f'{self.name} is ready for work, joining channel(s) {TARGET_CHANNEL} ', 0)
-            await ready_event.chat.join_room(TARGET_CHANNEL)
+            for target in TARGET_CHANNEL:
+                print_line(f'{self.name} is ready for work, joining channel {target} ', 0)
+                await ready_event.chat.join_room(target)
+                await asyncio.sleep(1)
 
     async def handle_incoming_message(self, msg: ChatMessage, max_messages=35):
         if msg.room.name == msg.chat.username:
             return
         if msg.user.name in self.ignore_users:
             return
+
+        # Load list of words to ignore from a csv file
+        with open('blacklist.txt', 'r') as csvfile:
+            words_to_ignore = csv.reader(csvfile)
+            words_to_ignore = list(words_to_ignore)[0]  # Assuming the CSV has only one row
+
+        # Convert the incoming message to a set of words
+        incoming_words = set(msg.text.split())
+
+        # Check if the incoming message contains any of the words to ignore
+        if any(word in incoming_words for word in words_to_ignore):
+            return
+
+        # Check if the incoming message contains any link
+        url_regex = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+        if url_regex.search(msg.text):
+            return
+
         print_line(f'In {msg.room.name}, {msg.user.name}: {msg.text}', 1)
         # Create a new instance of MarkovChatbot for this room if it doesn't already exist
         if msg.room.name not in self.chatbots:
